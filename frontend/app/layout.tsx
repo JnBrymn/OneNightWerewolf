@@ -1,6 +1,6 @@
 export const metadata = {
-  title: 'Ping Application',
-  description: 'Simple Next.js and FastAPI demo',
+  title: 'One Night Werewolf',
+  description: 'A fast-paced game of deduction and deception',
 }
 
 export default function RootLayout({

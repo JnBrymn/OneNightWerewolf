@@ -1,0 +1,61 @@
+# One Night Werewolf - Project Context
+
+## 🎯 CURRENT STATUS: Step 3 Complete (15% Progress)
+
+**Last Updated:** 2026-02-02
+
+### ✅ Completed Steps (1-3)
+- Step 1: Project setup, health check, tests
+- Step 2: Game set creation (API + UI)
+- Step 3: Player management & lobby (shareable join URLs)
+
+### 🔜 NEXT: Step 4 - Game Creation & Role Assignment
+**Priority:** Implement game creation when "Start Game" is clicked
+- Backend: Create Game, PlayerRole, CenterCard models
+- Implement role shuffling/assignment algorithm
+- Frontend: Role reveal screen
+- Tests: Write tests FIRST (TDD approach)
+
+**Reference:** See `product/implementation_steps.md` Step 4
+
+---
+
+## Tech Stack
+- **Backend:** FastAPI, SQLite, SQLAlchemy, Pytest
+- **Frontend:** Next.js 14 (App Router), React, TypeScript
+- **Tools:** uv (Python), npm
+
+## Architecture
+- Backend: `/backend` (port 8000)
+- Frontend: `/frontend` (port 3000)
+- Database: SQLite (`backend/onw.db`)
+
+## Development Commands
+- Start servers: `./scripts/start_servers.sh`
+- Run tests: `cd backend && uv run pytest tests/ -v`
+- Backend only: `cd backend && uv run uvicorn main:app --reload`
+- Frontend only: `cd frontend && npm run dev`
+
+## Code Style
+- **Tests First:** Always write tests before implementation (TDD)
+- **Focus:** Test main functionality, not every edge case
+- **No Over-engineering:** Keep it simple, avoid premature abstractions
+
+## Key Files
+- `product/README.md` - Progress summary
+- `product/implementation_steps.md` - Full 20-step plan
+- `START_HERE.md` - Quick resumption guide
+- `STEP3_DEMO.md` - Latest demo instructions
+
+## Important Notes
+- Player ID stored in localStorage
+- API proxy: `/api/*` → `http://localhost:8000/api/*`
+- Real-time updates: Currently polling (WebSocket in Step 15)
+- Using TDD: Write tests, see them fail, implement, see them pass
+
+---
+
+When user opens this project, remind them to:
+1. Check `START_HERE.md` for current status
+2. Run `./scripts/start_servers.sh` to start development
+3. Review Step 4 in `product/implementation_steps.md`

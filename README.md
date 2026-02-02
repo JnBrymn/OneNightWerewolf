@@ -1,148 +1,216 @@
-# Ping Application
+# One Night Werewolf
 
-A simple Next.js frontend communicating with a FastAPI backend.
+A digital implementation of the One Night Ultimate Werewolf card game.
+
+---
+
+## 🎯 CURRENT STATUS: Step 3 Complete (15% Progress)
+
+**👉 NEXT SESSION: Start with [`START_HERE.md`](START_HERE.md)**
+
+### ✅ What's Working Now
+- ✓ Game creation (players, roles, timer configuration)
+- ✓ Players join via shareable URL
+- ✓ Real-time lobby with player list
+- ✓ "Start Game" validation
+
+### 🔜 Next: Step 4 - Game Creation & Role Assignment
+Create Game/PlayerRole models, implement role shuffling, role reveal UI.
+**See:** `product/implementation_steps.md` - Step 4
+
+**Progress:** 3 of 20 steps complete | 13 tests passing
+
+---
 
 ## Quick Start
 
-The easiest way to start both servers is using the provided script:
-
+### Start Both Servers
 ```bash
 ./scripts/start_servers.sh
 ```
+- Backend: http://localhost:8000
+- Frontend: http://localhost:3000
+- Shows unified logs with color-coded prefixes
 
-This script will:
-- Check if servers are already running (exits if they are)
-- Install dependencies if needed (uses UV for Python packages, npm for frontend)
-- Start both servers in development/watch mode
-- Log backend output to `logs/backend.txt`
-- Log frontend output to `logs/frontend.txt`
-- Handle Ctrl+C to gracefully stop both servers
-
-**Note:** The script requires [UV](https://github.com/astral-sh/uv) to be installed. Install it with:
+### Run Tests
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+cd backend
+uv run pytest tests/ -v
 ```
 
-## Manual Setup
+### Try the App
+1. Open http://localhost:3000
+2. Click "Create Game"
+3. Set players and roles
+4. Copy join URL and share with others
+5. Start game when everyone's joined
 
-### Backend (FastAPI with UV)
-
-The backend uses [UV](https://github.com/astral-sh/uv) for fast Python package management.
-
-1. Install UV (if not already installed):
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
-
-2. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-
-3. Create virtual environment and install dependencies:
-   ```bash
-   uv venv
-   uv sync
-   ```
-
-4. Run the FastAPI server:
-   ```bash
-   uv run uvicorn main:app --reload
-   ```
-
-   The backend will be available at `http://localhost:8000`
-
-### Frontend (Next.js)
-
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Run the development server:
-   ```bash
-   npm run dev
-   ```
-
-   The frontend will be available at `http://localhost:3000`
-
-## Deployment to Fly.io
-
-This application is configured for deployment to Fly.io.
-
-### Quick Deploy
-
-Use the deployment script which will automatically create the app if it doesn't exist:
-
-```bash
-./scripts/deploy_fly.sh
-```
-
-### Manual Deploy
-
-1. Install the Fly.io CLI:
-   ```bash
-   curl -L https://fly.io/install.sh | sh
-   ```
-
-2. Login to Fly.io:
-   ```bash
-   fly auth login
-   ```
-
-3. Create the app (if it doesn't exist):
-   ```bash
-   fly apps create ping-app
-   ```
-
-4. Deploy the application:
-   ```bash
-   fly deploy
-   ```
-
-The application will be available at `https://ping-app.fly.dev` (or your custom domain).
-
-**Note:** Make sure to set the `ALLOWED_ORIGINS` environment variable in Fly.io to include your production domain:
-```bash
-fly secrets set ALLOWED_ORIGINS=https://ping-app.fly.dev
-```
-
-## Usage
-
-1. Make sure both servers are running (backend on port 8000, frontend on port 3000)
-2. Open `http://localhost:3000` in your browser
-3. Click the "ping" button
-4. The text box will display "pong" from the FastAPI backend
+---
 
 ## Project Structure
 
 ```
 .
-├── backend/
-│   ├── main.py           # FastAPI application
-│   ├── pyproject.toml    # Python project configuration (UV)
-│   └── requirements.txt  # Python dependencies (legacy, pyproject.toml is primary)
-├── frontend/
-│   ├── app/
-│   │   ├── layout.tsx    # Root layout
-│   │   └── page.tsx      # Main page with ping button
-│   ├── package.json      # Node.js dependencies
-│   └── next.config.js    # Next.js configuration
-├── scripts/
-│   ├── start_servers.sh  # Script to start both servers (dev)
-│   ├── start_prod.sh     # Production startup script
-│   └── deploy_fly.sh     # Deploy script for Fly.io
-├── Dockerfile            # Docker configuration for Fly.io
-├── fly.toml              # Fly.io configuration
-├── logs/                 # Server logs (gitignored)
-│   ├── backend.txt       # Backend server logs
-│   └── frontend.txt      # Frontend server logs
-└── README.md
+├── START_HERE.md              # 👈 Resume work here
+├── product/
+│   ├── README.md              # Detailed progress tracking
+│   ├── implementation_steps.md # 20-step implementation plan
+│   ├── product_design.md      # Complete technical design
+│   └── instructions.md        # Original game rules
+├── backend/                   # FastAPI + SQLite
+│   ├── main.py
+│   ├── models/                # Database models
+│   ├── api/                   # API endpoints
+│   ├── db/                    # Database config
+│   └── tests/                 # Test suite (13 passing)
+├── frontend/                  # Next.js + React
+│   └── app/
+│       ├── page.tsx           # Landing page
+│       ├── create/            # Create game
+│       ├── join/              # Join game
+│       └── lobby/             # Game lobby
+└── scripts/
+    └── start_servers.sh       # Start both servers
 
 ```
 
+---
+
+## Tech Stack
+
+- **Backend:** FastAPI, SQLite, SQLAlchemy, Pytest
+- **Frontend:** Next.js 14 (App Router), React, TypeScript
+- **Tools:** uv (Python), npm
+- **Deployment:** Configured for Fly.io
+
+---
+
+## Development
+
+### Manual Server Start
+
+**Backend:**
+```bash
+cd backend
+uv run uvicorn main:app --reload
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm run dev
+```
+
+### Testing
+```bash
+# Run all tests
+cd backend && uv run pytest tests/ -v
+
+# Run specific test file
+uv run pytest tests/test_players.py -v
+
+# With coverage
+uv run pytest tests/ -v --cov
+```
+
+### Database
+- SQLite database: `backend/onw.db`
+- Auto-created on first run
+- Reset: `rm backend/onw.db` and restart
+
+---
+
+## API Documentation
+
+When servers are running:
+- **Interactive API docs:** http://localhost:8000/docs
+- **Health check:** http://localhost:8000/health
+
+### Key Endpoints
+- `POST /api/game-sets` - Create game
+- `GET /api/game-sets/{id}` - Get game details
+- `POST /api/players` - Create player
+- `POST /api/game-sets/{id}/players/{id}/join` - Join game
+- `GET /api/game-sets/{id}/players` - List players
+- `POST /api/game-sets/{id}/start` - Start game
+
+---
+
+## Implementation Progress
+
+**Completed (3/20):**
+1. ✅ Project setup & infrastructure
+2. ✅ Game set creation
+3. ✅ Player management & lobby
+
+**Next (4-7):**
+4. 🔜 Game creation & role assignment
+5. ⬜ Night phase infrastructure
+6. ⬜ Night phase - Werewolf role
+7. ⬜ Night phase - Seer role
+
+**Future (8-20):**
+- Night phase roles (Robber, Troublemaker, Drunk, Insomniac)
+- Day discussion & voting
+- Results & win conditions
+- Multi-game scoring
+- WebSocket real-time updates
+- Chat system
+- Additional roles (Minion, Mason, Tanner, Hunter)
+- Polish, testing, deployment
+
+**Full plan:** See `product/implementation_steps.md`
+
+---
+
+## Key Features
+
+### Current
+- **Shareable Join URLs** - Copy link, share with friends
+- **Real-time Lobby** - See players join in real-time (2s polling)
+- **Role Validation** - Ensures correct number of roles
+- **Player Management** - Can't join twice, can't join full games
+
+### Coming Soon (Step 4)
+- Role assignment and reveal
+- Night phase with role actions
+- Discussion and voting
+- Win condition logic
+
+---
+
+## Notes
+
+- **TDD Approach:** Tests written before implementation
+- **Player ID:** Stored in browser localStorage
+- **Real-time:** Currently polling, WebSocket in Step 15
+- **UV Required:** Install with `curl -LsSf https://astral.sh/uv/install.sh | sh`
+
+---
+
+## Deployment to Fly.io
+
+```bash
+./scripts/deploy_fly.sh
+```
+
+Or manually:
+```bash
+fly auth login
+fly apps create onw-app
+fly deploy
+```
+
+---
+
+## Resources
+
+- **Product Docs:** `product/` directory
+- **Demo Guides:** `STEP{1,2,3}_DEMO.md`
+- **Quick Start:** `QUICKSTART.md`
+- **Resume Work:** `START_HERE.md` 👈
+
+---
+
+**Last Updated:** 2026-02-02
+**Next Session:** Pick up with Step 4 (see `START_HERE.md`)

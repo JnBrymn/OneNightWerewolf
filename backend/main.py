@@ -1,8 +1,28 @@
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from db.database import init_db
+from api.game_sets import router as game_sets_router
+from api.players import router as players_router
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database on startup."""
+    init_db()
+    yield
+
+
+app = FastAPI(
+    title="One Night Werewolf API",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Include routers
+app.include_router(game_sets_router)
+app.include_router(players_router)
 
 # Get allowed origins from environment or default to localhost
 allowed_origins = os.getenv(
@@ -19,7 +39,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint to verify API is running."""
+    return {"status": "healthy"}
+
+
 @app.get("/ping")
 async def ping():
+    """Legacy ping endpoint for compatibility."""
     return {"message": "pong"}
 
