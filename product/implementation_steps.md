@@ -4,8 +4,45 @@
 This document breaks down the implementation into demonstrable milestones. Each step includes:
 - **Backend**: Testable API endpoints with curl examples
 - **Frontend**: Visible UI components
-- **Tests**: Written BEFORE implementation (TDD)
+- **Tests**: Written BEFORE implementation (TDD) - both backend AND frontend
 - **Demo**: Clear way to verify the step works
+
+---
+
+## Testing Strategy
+
+### Backend Testing (Python/Pytest)
+- **What to test**: API endpoints, business logic, database operations
+- **Tools**: pytest, FastAPI TestClient
+- **Focus**: HTTP responses, validation, database state
+- **Example**: Test that POST /api/players creates a player
+
+### Frontend Testing (Jest + React Testing Library)
+- **What to test**: User interactions, navigation, form validation, API integration
+- **Tools**: Jest (test runner), React Testing Library (component testing)
+- **Focus**: What users see and do, NOT implementation details
+- **What NOT to test**: Styling, CSS, internal state, third-party libraries
+
+### Frontend Test Examples:
+```javascript
+// Good: Test user behavior
+test('clicking Create Game navigates to /create', () => {
+  render(<Home />)
+  const button = screen.getByText('Create Game')
+  fireEvent.click(button)
+  expect(mockRouter.push).toHaveBeenCalledWith('/create')
+})
+
+// Good: Test form validation
+test('shows error when role count is wrong', () => {
+  render(<CreateGame />)
+  // ... submit with wrong role count
+  expect(screen.getByText(/must equal players/)).toBeInTheDocument()
+})
+
+// Bad: Don't test implementation details
+test('useState hook has correct initial value', () => { ... }) // ❌
+```
 
 ---
 
@@ -32,11 +69,26 @@ This document breaks down the implementation into demonstrable milestones. Each 
 1. **Setup Next.js project**
    - Create Next.js app with App Router
    - Install dependencies: `zustand`, `tailwindcss`
+   - Setup test environment: `jest`, `@testing-library/react`, `@testing-library/jest-dom`
    - Setup basic layout and homepage
 
-2. **Create basic landing page**
+2. **Write Tests First** (`__tests__/landing.test.tsx`)
+   ```javascript
+   test('renders landing page with title', () => {
+     render(<Home />)
+     expect(screen.getByText('One Night Werewolf')).toBeInTheDocument()
+   })
+
+   test('has Create Game and Join Game buttons', () => {
+     render(<Home />)
+     expect(screen.getByText('Create Game')).toBeInTheDocument()
+     expect(screen.getByText('Join Game')).toBeInTheDocument()
+   })
+   ```
+
+3. **Create basic landing page**
    - Simple welcome screen
-   - "Create Game" and "Join Game" buttons (non-functional yet)
+   - "Create Game" and "Join Game" buttons (navigation in Step 2)
 
 ### Demo
 **Backend:**

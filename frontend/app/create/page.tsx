@@ -19,6 +19,7 @@ const AVAILABLE_ROLES = [
 
 export default function CreateGame() {
   const router = useRouter()
+  const [playerName, setPlayerName] = useState('')
   const [numPlayers, setNumPlayers] = useState(5)
   const [discussionTimer, setDiscussionTimer] = useState(300)
   const [selectedRoles, setSelectedRoles] = useState<{ [key: string]: number }>({
@@ -46,6 +47,11 @@ export default function CreateGame() {
     e.preventDefault()
     setError('')
 
+    if (!playerName.trim()) {
+      setError('Please enter your name')
+      return
+    }
+
     if (totalRoles !== requiredRoles) {
       setError(`Total roles (${totalRoles}) must equal players + 3 (${requiredRoles})`)
       return
@@ -61,7 +67,8 @@ export default function CreateGame() {
 
     setIsCreating(true)
     try {
-      const response = await fetch('/api/game-sets', {
+      // First, create the game set
+      const gameSetResponse = await fetch('/api/game-sets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -71,14 +78,46 @@ export default function CreateGame() {
         })
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
+      if (!gameSetResponse.ok) {
+        const errorData = await gameSetResponse.json()
         throw new Error(errorData.detail || 'Failed to create game')
       }
 
-      const data = await response.json()
-      // Redirect to lobby page with game_set_id
-      router.push(`/lobby/${data.game_set_id}`)
+      const gameSetData = await gameSetResponse.json()
+      const gameSetId = gameSetData.game_set_id
+
+      // Then, create the player (host)
+      const playerResponse = await fetch('/api/players', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          player_name: playerName.trim()
+        })
+      })
+
+      if (!playerResponse.ok) {
+        throw new Error('Failed to create player')
+      }
+
+      const playerData = await playerResponse.json()
+      const playerId = playerData.player_id
+
+      // Store player ID in sessionStorage (unique per tab)
+      sessionStorage.setItem('player_id', playerId)
+      sessionStorage.setItem('player_name', playerName.trim())
+
+      // Join the game set
+      const joinResponse = await fetch(`/api/game-sets/${gameSetId}/players/${playerId}/join`, {
+        method: 'POST'
+      })
+
+      if (!joinResponse.ok) {
+        const errorData = await joinResponse.json()
+        throw new Error(errorData.detail || 'Failed to join game')
+      }
+
+      // Redirect to lobby page with game_set_id and player_id in URL
+      router.push(`/lobby/${gameSetId}?player_id=${playerId}`)
     } catch (err: any) {
       setError(err.message || 'Failed to create game')
       setIsCreating(false)
@@ -97,12 +136,38 @@ export default function CreateGame() {
       </h1>
 
       <form onSubmit={handleSubmit}>
+        {/* Player Name */}
+        <div style={{ marginBottom: '2rem' }}>
+          <label htmlFor="player-name" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+            Your Name *
+          </label>
+          <input
+            id="player-name"
+            type="text"
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+            placeholder="Enter your name..."
+            maxLength={50}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              fontSize: '1rem',
+              border: '2px solid #ced4da',
+              borderRadius: '4px'
+            }}
+          />
+          <small style={{ color: '#7f8c8d' }}>
+            You'll be the host of this game
+          </small>
+        </div>
+
         {/* Number of Players */}
         <div style={{ marginBottom: '2rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+          <label htmlFor="num-players" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
             Number of Players: {numPlayers}
           </label>
           <input
+            id="num-players"
             type="range"
             min="3"
             max="10"

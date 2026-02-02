@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 
 interface GameSet {
   game_set_id: string
@@ -27,6 +27,7 @@ interface PlayersResponse {
 export default function Lobby() {
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const game_set_id = params.game_set_id as string
 
   const [gameSet, setGameSet] = useState<GameSet | null>(null)
@@ -34,8 +35,9 @@ export default function Lobby() {
   const [error, setError] = useState('')
   const [isStarting, setIsStarting] = useState(false)
 
-  // Get current player ID from localStorage
-  const currentPlayerId = typeof window !== 'undefined' ? localStorage.getItem('player_id') : null
+  // Get current player ID from URL first, then fall back to sessionStorage
+  const currentPlayerId = searchParams.get('player_id') ||
+    (typeof window !== 'undefined' ? sessionStorage.getItem('player_id') : null)
 
   // Fetch game set details
   useEffect(() => {

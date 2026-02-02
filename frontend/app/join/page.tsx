@@ -47,9 +47,9 @@ export default function JoinGame() {
       const playerData = await playerResponse.json()
       const playerId = playerData.player_id
 
-      // Store player ID in localStorage for future use
-      localStorage.setItem('player_id', playerId)
-      localStorage.setItem('player_name', playerName.trim())
+      // Store player ID in sessionStorage (unique per tab)
+      sessionStorage.setItem('player_id', playerId)
+      sessionStorage.setItem('player_name', playerName.trim())
 
       // Then join the game set
       const joinResponse = await fetch(`/api/game-sets/${gameSetId}/players/${playerId}/join`, {
@@ -61,8 +61,8 @@ export default function JoinGame() {
         throw new Error(errorData.detail || 'Failed to join game')
       }
 
-      // Redirect to lobby
-      router.push(`/lobby/${gameSetId}`)
+      // Redirect to lobby with player_id in URL
+      router.push(`/lobby/${gameSetId}?player_id=${playerId}`)
     } catch (err: any) {
       setError(err.message || 'Failed to join game')
       setIsJoining(false)
