@@ -1,5 +1,32 @@
 # One Night Werewolf - Implementation Steps
 
+## 🎯 CURRENT STATUS (Updated: 2026-02-02)
+
+### ✅ Completed Steps:
+- **Step 1**: Project Setup & Basic Infrastructure ✅
+- **Step 2**: Game Set Creation (Lobby Start) ✅
+- **Step 3**: Player Management & Lobby ✅
+- **Step 4**: Game Creation & Role Assignment ✅
+  - Backend: Game/PlayerRole/CenterCard models, role shuffling service, API endpoints
+  - Frontend: Role reveal page, lobby redirects to game
+  - Tests: 28/28 backend tests passing, 17/17 frontend tests passing
+
+### 🚀 NEXT STEP: Step 5 - Night Phase - Basic Infrastructure
+**What to implement:**
+- Backend: Night phase orchestration (wake order tracking, role completion)
+- Backend: Endpoints for night status and marking roles complete
+- Frontend: Night phase UI showing current role acting
+- Frontend: Polling for night status updates
+
+**Key files to work on:**
+- Backend: Create `services/night_service.py` for orchestration logic
+- Backend: Create `api/night.py` for night phase endpoints
+- Backend: Add tests in `tests/test_night_phase.py`
+- Frontend: Update `/game/[game_id]/page.tsx` to handle night phase
+- Frontend: Add tests in `__tests__/game.test.tsx`
+
+---
+
 ## Overview
 This document breaks down the implementation into demonstrable milestones. Each step includes:
 - **Backend**: Testable API endpoints with curl examples
