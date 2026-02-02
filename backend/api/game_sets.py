@@ -5,6 +5,7 @@ from db.database import get_db
 from models.game_set import GameSet
 from models.player import Player, game_set_players
 from models.schemas import GameSetCreate, GameSetResponse, PlayerResponse
+from services import game_service
 
 router = APIRouter(prefix="/api/game-sets", tags=["game-sets"])
 
@@ -76,23 +77,14 @@ def list_players(game_set_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{game_set_id}/start", status_code=201)
-def start_game(game_set_id: str, db: Session = Depends(get_db)):
+def start_game_endpoint(game_set_id: str, db: Session = Depends(get_db)):
     """Start the first game in a game set."""
-    game_set = db.query(GameSet).filter(GameSet.game_set_id == game_set_id).first()
-    if not game_set:
-        raise HTTPException(status_code=404, detail="Game set not found")
-
-    # Check if enough players joined
-    if len(game_set.players) < game_set.num_players:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough players. Need {game_set.num_players}, have {len(game_set.players)}"
-        )
-
-    # For now, return a mock response (we'll implement game creation in Step 4)
-    return {
-        "game_id": "mock-game-id",
-        "game_set_id": game_set_id,
-        "game_number": 1,
-        "state": "NIGHT"
-    }
+    try:
+        game = game_service.start_game(db, game_set_id)
+        return game.to_dict()
+    except ValueError as e:
+        # Convert ValueError from service to appropriate HTTP error
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail=str(e))
+        else:
+            raise HTTPException(status_code=400, detail=str(e))

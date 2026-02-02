@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from db.database import init_db
 from api.game_sets import router as game_sets_router
 from api.players import router as players_router
+from api.games import router as games_router
 
 
 @asynccontextmanager
@@ -23,6 +24,7 @@ app = FastAPI(
 # Include routers
 app.include_router(game_sets_router)
 app.include_router(players_router)
+app.include_router(games_router)
 
 # Get allowed origins from environment or default to localhost
 allowed_origins = os.getenv(

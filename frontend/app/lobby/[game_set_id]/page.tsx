@@ -92,8 +92,8 @@ export default function Lobby() {
       }
 
       const data = await response.json()
-      // For now, show success message (in Step 4 we'll redirect to game page)
-      alert(`Game started! Game ID: ${data.game_id}`)
+      // Redirect to game page to see role
+      router.push(`/game/${data.game_id}?player_id=${currentPlayerId}`)
     } catch (err: any) {
       setError(err.message)
       setIsStarting(false)
