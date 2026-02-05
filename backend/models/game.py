@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, Enum as SQLEnum
+from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, Enum as SQLEnum, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from db.database import Base
@@ -23,6 +23,7 @@ class Game(Base):
     game_number = Column(Integer, nullable=False)  # Sequence number within game set (1, 2, 3...)
     state = Column(SQLEnum(GameState), nullable=False, default=GameState.NIGHT)
     current_role_step = Column(String, nullable=True)  # Which role is active in night phase
+    active_roles = Column(JSON, nullable=True)  # Ordered list of active roles (roles with wake_order) present in this game, ordered by wake_order
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     ended_at = Column(DateTime(timezone=True), nullable=True)
@@ -40,6 +41,7 @@ class Game(Base):
             "game_number": self.game_number,
             "state": self.state.value if self.state else None,
             "current_role_step": self.current_role_step,
+            "active_roles": self.active_roles,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "ended_at": self.ended_at.isoformat() if self.ended_at else None,

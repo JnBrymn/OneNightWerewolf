@@ -7,7 +7,7 @@
 - **Step 2**: Game Set Creation (Lobby Start) ✅
 - **Step 3**: Player Management & Lobby ✅
 - **Step 4**: Game Creation & Role Assignment ✅
-  - Backend: Game/PlayerRole/CenterCard models, role shuffling service, API endpoints
+  - Backend: Role model/table, Game/PlayerRole/CenterCard models, role shuffling service, API endpoints
   - Frontend: Role reveal page, lobby redirects to game
   - Tests: 28/28 backend tests passing, 17/17 frontend tests passing
 - **Step 5**: Night Phase - Basic Infrastructure ✅
@@ -38,6 +38,15 @@ This document breaks down the implementation into demonstrable milestones. Each 
 - **Frontend**: Visible UI components
 - **Tests**: Written BEFORE implementation (TDD) - both backend AND frontend
 - **Demo**: Clear way to verify the step works
+
+## Unified Game Screen Architecture
+**Important**: The game uses a **single unified screen** that adapts based on game state (`state` and `current_role_step` fields). This screen:
+- Always displays all players as clickable buttons (enabled/disabled based on available actions)
+- Always displays center cards as clickable buttons (enabled/disabled based on available actions)
+- Always shows accrued actions visible to the current player (persistent throughout game)
+- Adapts behavior based on game state (NIGHT, DAY_DISCUSSION, DAY_VOTING)
+- Uses `GET /api/games/{game_id}/players/{player_id}/available-actions` to determine which buttons are enabled
+- Uses `GET /api/games/{game_id}/players/{player_id}/actions` to display accrued actions
 
 ---
 
@@ -339,9 +348,10 @@ curl -X POST http://localhost:8000/api/game-sets/{game_set_id}/start
        # Should have 5 player roles assigned
        assert len(player_roles) == 5
 
-       # All roles should be from selected role collection
+       # All roles should be from selected role collection (validate against roles table)
        assigned_roles = [pr["initial_role"] for pr in player_roles]
-       assert all(role in SELECTED_ROLES for role in assigned_roles)
+       selected_role_ids = game_set.selected_roles  # From game set
+       assert all(role in selected_role_ids for role in assigned_roles)
 
    def test_center_cards_created():
        game_id = ...
@@ -361,7 +371,8 @@ curl -X POST http://localhost:8000/api/game-sets/{game_set_id}/start
        response = client.get(f"/api/games/{game_id}/players/{player_id}/role")
        assert response.status_code == 200
        assert "initial_role" in response.json()
-       assert response.json()["initial_role"] in SELECTED_ROLES
+       # Validate role exists in roles table and is in selected roles
+       assert response.json()["initial_role"] in game_set.selected_roles
 
    def test_player_cannot_see_other_roles():
        game_id = ...
@@ -377,14 +388,29 @@ curl -X POST http://localhost:8000/api/game-sets/{game_set_id}/start
    ```
 
 2. **Create database models**
+   - `Role` model (reference table with role definitions: role_id, has_action, wake_order, team, description)
    - `Game` model
-   - `PlayerRole` model
-   - `CenterCard` model
+   - `PlayerRole` model (references roles.role_id via foreign key)
+   - `CenterCard` model (references roles.role_id via foreign key)
+   - Seed roles table with all 11 roles and their properties:
+     - Werewolf: has_action=true, wake_order=1, team="werewolf"
+     - Minion: has_action=true, wake_order=2, team="werewolf"
+     - Mason: has_action=true, wake_order=3, team="village"
+     - Seer: has_action=true, wake_order=4, team="village"
+     - Robber: has_action=true, wake_order=5, team="village"
+     - Troublemaker: has_action=true, wake_order=6, team="village"
+     - Drunk: has_action=true, wake_order=7, team="village"
+     - Insomniac: has_action=true, wake_order=8, team="village"
+     - Villager: has_action=false, wake_order=null, team="village"
+     - Tanner: has_action=false, wake_order=null, team="tanner"
+     - Hunter: has_action=false, wake_order=null, team="village"
+   - **Benefits**: Centralizes role metadata, enables querying by properties, ensures data integrity via foreign keys, makes it easy to add new roles without code changes
 
 3. **Implement role assignment logic**
-   - Shuffle and assign roles from selected collection
+   - Shuffle and assign roles from selected collection (role_id values)
    - Assign N cards to players, 3 to center
-   - Store initial roles in database
+   - Store initial roles in database (as foreign keys to roles table)
+   - Use roles table to determine wake order, teams, and action requirements
 
 4. **Implement endpoints**
    - `POST /api/game-sets/{game_set_id}/start` - Create first game, assign roles
@@ -468,8 +494,10 @@ curl http://localhost:8000/api/games/{game_id}/players/{player2_id}/role \
    def test_night_phase_ends_after_all_roles():
        game_id = ...
 
-       # Complete all roles in sequence
-       for role in NIGHT_WAKE_ORDER:
+       # Complete all roles in sequence (get wake order from roles table)
+       # Query roles with has_action=true, ordered by wake_order
+       roles_in_order = get_wake_order_from_db()  # Helper to query roles table
+       for role in roles_in_order:
            client.post(f"/api/games/{game_id}/night-status/complete", json={"role": role})
 
        # Game should transition to DAY_DISCUSSION
@@ -478,26 +506,42 @@ curl http://localhost:8000/api/games/{game_id}/players/{player2_id}/role \
    ```
 
 2. **Implement night phase orchestration**
-   - Night wake order manager
+   - Night wake order manager (query roles table ordered by wake_order, filter has_action=true)
    - Track current role in sequence
    - Track completed roles
    - Auto-advance to next role when current completes
    - Transition to DAY_DISCUSSION when all roles complete
+   - Note: Wake order comes from roles table (wake_order field), not hardcoded list
 
 3. **Implement endpoints**
    - `GET /api/games/{game_id}/night-status` - Get current night phase status
    - `POST /api/games/{game_id}/night-status/complete` - Mark role complete
+   - `GET /api/games/{game_id}/players/{player_id}/available-actions` - Get which players/center cards are actionable (returns actionable_players, actionable_center_cards, instructions)
+   - `GET /api/games/{game_id}/players/{player_id}/actions` - Get all accrued actions visible to player (for persistent display)
 
 ### Frontend Tasks
-1. **Create Night Phase UI** (`/game/[game_set_id]` when state = NIGHT)
-   - Show "Night Phase" header
-   - Display current role being called (for all players)
-   - "Waiting for {role} to complete action..." message
-   - Simple loading spinner
+1. **Create Unified Game Screen** (`/game/[game_id]` - single screen for all phases)
+   - **Always Visible Elements**:
+     - Display all players as clickable buttons/avatars arranged around board
+     - Display three center cards as clickable buttons
+     - **Accrued Actions Section**: Persistent area showing all actions visible to the current player
+       - Fetch from `GET /api/games/{game_id}/players/{player_id}/actions`
+       - Display each action as readable text (e.g., "You are a Werewolf. Your fellow werewolves are: [names]")
+       - Actions persist throughout game (night through day)
+   - **State-Based Adaptation** (when state = NIGHT):
+     - Show "Night Phase" header
+     - Display current role being called (`current_role_step` from game state)
+     - Fetch available actions: `GET /api/games/{game_id}/players/{player_id}/available-actions`
+     - Enable/disable player and center card buttons based on response
+     - When it's player's turn: Show role-specific instructions, enable relevant buttons
+     - When not player's turn: Show "Waiting for {role} to complete action...", disable all buttons
+   - **Phase Indicator**: Show current game state (Night, Day Discussion, Day Voting)
 
-2. **Add polling for night status**
-   - Poll `/api/games/{game_id}/night-status` every 2 seconds
-   - Update UI when current role changes
+2. **Add polling for game state**
+   - Poll `/api/games/{game_id}` every 2 seconds to get current state and `current_role_step`
+   - Poll `/api/games/{game_id}/players/{player_id}/available-actions` to update button states
+   - Poll `/api/games/{game_id}/players/{player_id}/actions` to update accrued actions display
+   - Update UI when state or current_role_step changes
 
 ### Demo
 **Backend:**
@@ -590,7 +634,9 @@ curl http://localhost:8000/api/games/{game_id}/night-status
 2. **Implement werewolf logic**
    - Identify all werewolves in game
    - If 2+ werewolves: automatically show each werewolf the others
+     - **Important**: Create a separate action record (VIEW_CARD type) for each werewolf showing they viewed the other werewolves. This ensures each werewolf has their action information persisted and displayed on their screen throughout the game.
    - If 1 werewolf (lone wolf): allow viewing 1 center card
+     - Create one action record (VIEW_CARD type) when lone wolf views a center card
    - Track werewolf acknowledgments
    - Auto-complete when all werewolves acknowledge (or lone wolf views card)
 
@@ -600,14 +646,21 @@ curl http://localhost:8000/api/games/{game_id}/night-status
    - `POST /api/games/{game_id}/players/{player_id}/acknowledge` - Acknowledge seeing info
 
 ### Frontend Tasks
-1. **Create Werewolf Turn UI**
-   - When it's Werewolf turn AND player is a werewolf:
-     - **Multiple werewolves**: Show "You are a Werewolf. Your fellow werewolves are: [names]"
-     - **Lone wolf**: Show "You are the lone werewolf. Choose a center card to view: [Card 1] [Card 2] [Card 3]"
-   - "Continue" button to acknowledge
-
-2. **Create Waiting UI**
-   - When it's Werewolf turn but player is NOT a werewolf:
+1. **Update Unified Game Screen for Werewolf Turn**
+   - When `current_role_step` = "Werewolf" AND player is a werewolf:
+     - **Multiple werewolves**: 
+       - Center card buttons disabled
+       - Player buttons disabled
+       - Show instructions: "You are a Werewolf. Your fellow werewolves are: [names]"
+       - Action automatically recorded and displayed in Accrued Actions section
+       - "Continue" button to acknowledge
+     - **Lone wolf**:
+       - Center card buttons enabled (can click to view)
+       - Player buttons disabled
+       - Show instructions: "You are the lone werewolf. Choose a center card to view"
+       - After clicking center card, action recorded and displayed in Accrued Actions: "You viewed center card [X]. The card is: [ROLE]"
+   - When `current_role_step` = "Werewolf" but player is NOT a werewolf:
+     - All buttons disabled
      - Show "Waiting for Werewolves to complete their turn..."
 
 ### Demo
@@ -636,9 +689,10 @@ curl http://localhost:8000/api/games/{game_id}/night-status
 ```
 
 **Frontend:**
-- Werewolf player sees: "You are a Werewolf. Your fellow werewolves are: [Bob, Charlie]"
+- Werewolf player sees: "You are a Werewolf. Your fellow werewolves are: [Bob, Charlie]" (this information persists on their screen)
 - Click "Continue"
 - See "Waiting for Minion to complete their turn..."
+- Lone wolf: Selects center card 1, sees "You viewed center card 1. The card is: VILLAGER" (this information persists)
 - Non-werewolf players see: "Waiting for Werewolves..."
 
 ---
@@ -714,6 +768,8 @@ curl http://localhost:8000/api/games/{game_id}/night-status
 2. **Implement Seer logic**
    - Validate player is Seer
    - Handle two action types: view player OR view 2 center cards
+   - **Important**: When Seer views two center cards, create two separate action records (one per center card viewed). Both actions are persisted and displayed on the Seer's screen so they can reference both pieces of information.
+   - When Seer views one player, create one action record (VIEW_CARD type)
    - Return viewed role(s)
    - Mark Seer role complete when action performed
 
@@ -725,8 +781,9 @@ curl http://localhost:8000/api/games/{game_id}/night-status
    - When it's Seer turn AND player is Seer:
      - Show two options: "View one player's card" or "View two center cards"
      - If "View player": Show clickable player avatars (excluding self)
+       - After selection, show: "[Player Name]'s card is: [ROLE]" (persistently displayed)
      - If "View center": Show two center card selectors
-     - After selection, show revealed role(s)
+       - After selection, show: "You viewed center cards [X] and [Y]. They are: [ROLE1] and [ROLE2]" (persistently displayed)
      - "Continue" button after viewing
 
 2. **Show game board with selectable elements**
@@ -760,18 +817,19 @@ curl http://localhost:8000/api/games/{game_id}/night-status
 - Click "View Player"
 - Player avatars become clickable
 - Click on Bob's avatar
-- See: "Bob's card is: ROBBER"
+- See: "Bob's card is: ROBBER" (this information persists on their screen)
 - Click "Continue"
 - See waiting screen for next role
+- OR: Seer selects center cards 0 and 2, sees "You viewed center cards 0 and 2. They are: VILLAGER and TROUBLEMAKER" (persists)
 
 ---
 
-## Step 8: Night Phase - Robber Role (Swap with View)
+## Step 8: Night Phase - Robber Role (Action with View)
 
 ### Backend Tasks
 1. **Write Tests First** (`tests/test_robber_role.py`)
    ```python
-   def test_robber_swaps_and_views():
+   def test_robber_exchanges_and_views():
        game_id = ...
        robber_id = ...
        target_id = ...
@@ -782,7 +840,7 @@ curl http://localhost:8000/api/games/{game_id}/night-status
 
        assert robber_original["initial_role"] == "Robber"
 
-       # Robber swaps with target
+       # Robber exchanges with target
        response = client.post(
            f"/api/games/{game_id}/players/{robber_id}/robber-action",
            json={"target_player_id": target_id},
@@ -791,33 +849,34 @@ curl http://localhost:8000/api/games/{game_id}/night-status
        assert response.status_code == 200
        assert "new_role" in response.json()
 
-       # Verify swap occurred
+       # Verify exchange occurred
        robber_after = get_player_role(game_id, robber_id)
        target_after = get_player_role(game_id, target_id)
 
-       assert robber_after["current_role"] == target_original["initial_role"]
-       assert target_after["current_role"] == "Robber"
+       assert robber_after["final_role"] == target_original["initial_role"]
+       assert target_after["final_role"] == "Robber"
 
-   def test_robber_creates_swap_record():
+   def test_robber_creates_action_record():
        game_id = ...
        robber_id = ...
        target_id = ...
 
-       # Perform swap
+       # Perform exchange
        client.post(
            f"/api/games/{game_id}/players/{robber_id}/robber-action",
            json={"target_player_id": target_id},
            headers={"X-Player-ID": robber_id}
        )
 
-       # Check swap was recorded
-       swaps = get_game_swaps(game_id)
-       assert len(swaps) == 1
-       assert swaps[0]["swap_type"] == "PLAYER_TO_PLAYER"
-       assert swaps[0]["source_player_id"] == robber_id
-       assert swaps[0]["target_player_id"] == target_id
+       # Check action was recorded
+       actions = get_game_actions(game_id)
+       assert len(actions) == 1
+       assert actions[0]["action_type"] == "SWAP_PLAYER_TO_PLAYER"
+       assert actions[0]["player_id"] == robber_id
+       assert actions[0]["source_id"] == robber_id
+       assert actions[0]["target_id"] == target_id
 
-   def test_robber_cannot_swap_with_self():
+   def test_robber_cannot_exchange_with_self():
        game_id = ...
        robber_id = ...
 
@@ -831,52 +890,53 @@ curl http://localhost:8000/api/games/{game_id}/night-status
 
 2. **Implement Robber logic**
    - Validate player is Robber
-   - Swap roles between Robber and target player
+   - Exchange roles between Robber and target player
+   - Update final_role for both players
    - Return new role to Robber (for viewing)
-   - Create swap record in database
+   - Create action record in database
    - Mark Robber role complete
 
 3. **Implement endpoints**
-   - `POST /api/games/{game_id}/players/{player_id}/robber-action` - Swap and view
+   - `POST /api/games/{game_id}/players/{player_id}/robber-action` - Exchange and view
 
 ### Frontend Tasks
 1. **Create Robber Turn UI**
    - When it's Robber turn AND player is Robber:
-     - Show: "Choose a player to rob (swap cards with)"
+     - Show: "Choose a player to rob (exchange cards with)"
      - Display clickable player avatars (excluding self)
-     - After selection: "You robbed [player] and became: [NEW ROLE]"
+     - After selection: Show "You robbed [player name] and took their card. You are now: [NEW ROLE]" (persistently displayed)
      - "Continue" button
 
 ### Demo
 **Backend:**
 ```bash
-# Robber swaps with target
+# Robber exchanges with target
 curl -X POST http://localhost:8000/api/games/{game_id}/players/{robber_id}/robber-action \
   -H "Content-Type: application/json" \
   -H "X-Player-ID: {robber_id}" \
   -d '{"target_player_id": "{target_id}"}'
 # Expected: {"new_role": "Seer", "message": "You are now the Seer"}
 
-# Verify swap in game state
+# Verify exchange in game state
 curl http://localhost:8000/api/games/{game_id}/players/{robber_id}/role \
   -H "X-Player-ID: {robber_id}"
-# Expected: {"current_role": "Seer"}
+# Expected: {"final_role": "Seer"}
 ```
 
 **Frontend:**
 - Robber sees: "Choose a player to rob"
 - Clicks on Alice's avatar
-- See: "You robbed Alice and became: SEER"
+- See: "You robbed Alice and took their card. You are now: SEER" (this information persists on their screen)
 - Click "Continue"
 
 ---
 
-## Step 9: Night Phase - Troublemaker & Drunk (Blind Swaps)
+## Step 9: Night Phase - Troublemaker & Drunk (Blind Actions)
 
 ### Backend Tasks
 1. **Write Tests First** (`tests/test_troublemaker_drunk.py`)
    ```python
-   def test_troublemaker_swaps_two_players():
+   def test_troublemaker_exchanges_two_players():
        game_id = ...
        troublemaker_id = ...
        player1_id = ...
@@ -886,7 +946,7 @@ curl http://localhost:8000/api/games/{game_id}/players/{robber_id}/role \
        p1_original = get_player_role(game_id, player1_id)
        p2_original = get_player_role(game_id, player2_id)
 
-       # Troublemaker swaps
+       # Troublemaker exchanges
        response = client.post(
            f"/api/games/{game_id}/players/{troublemaker_id}/troublemaker-action",
            json={"player1_id": player1_id, "player2_id": player2_id},
@@ -894,14 +954,14 @@ curl http://localhost:8000/api/games/{game_id}/players/{robber_id}/role \
        )
        assert response.status_code == 200
 
-       # Verify swap (roles exchanged)
+       # Verify exchange (roles exchanged)
        p1_after = get_player_role(game_id, player1_id)
        p2_after = get_player_role(game_id, player2_id)
 
-       assert p1_after["current_role"] == p2_original["current_role"]
-       assert p2_after["current_role"] == p1_original["current_role"]
+       assert p1_after["final_role"] == p2_original["initial_role"]
+       assert p2_after["final_role"] == p1_original["initial_role"]
 
-   def test_drunk_swaps_with_center():
+   def test_drunk_exchanges_with_center():
        game_id = ...
        drunk_id = ...
 
@@ -909,7 +969,7 @@ curl http://localhost:8000/api/games/{game_id}/players/{robber_id}/role \
        drunk_original = get_player_role(game_id, drunk_id)
        center_original = get_center_card(game_id, 1)
 
-       # Drunk swaps with center card 1
+       # Drunk exchanges with center card 1
        response = client.post(
            f"/api/games/{game_id}/players/{drunk_id}/drunk-action",
            json={"card_index": 1},
@@ -921,18 +981,19 @@ curl http://localhost:8000/api/games/{game_id}/players/{robber_id}/role \
        # Drunk doesn't see new role
        assert "new_role" not in response.json()
 
-       # Verify swap occurred
+       # Verify exchange occurred
        drunk_after = get_player_role(game_id, drunk_id)
        center_after = get_center_card(game_id, 1)
 
-       assert drunk_after["current_role"] == center_original["role"]
-       assert center_after["role"] == drunk_original["current_role"]
+       assert drunk_after["final_role"] == center_original["role"]
+       assert center_after["role"] == drunk_original["initial_role"]
    ```
 
 2. **Implement Troublemaker & Drunk logic**
-   - Troublemaker: Swap two other players (no viewing)
-   - Drunk: Swap with center card (no viewing)
-   - Create swap records
+   - Troublemaker: Exchange two other players (no viewing)
+   - Drunk: Exchange with center card (no viewing)
+   - Update final_role for affected players
+   - Create action records
    - Mark roles complete
 
 3. **Implement endpoints**
@@ -941,29 +1002,29 @@ curl http://localhost:8000/api/games/{game_id}/players/{robber_id}/role \
 
 ### Frontend Tasks
 1. **Create Troublemaker Turn UI**
-   - Show: "Choose two players to swap"
+   - Show: "Choose two players to exchange"
    - Clickable player avatars (excluding self)
    - Select two players
-   - Show: "You swapped [player1] and [player2]"
-   - No role reveal
+   - Show: "You swapped [player1 name] and [player2 name]" (persistently displayed)
+   - No role reveal (Troublemaker doesn't see what roles were exchanged)
 
 2. **Create Drunk Turn UI**
-   - Show: "Choose a center card to swap with"
+   - Show: "Choose a center card to exchange with"
    - Three center card selectors
    - Click one
-   - Show: "You exchanged your card with a center card. You don't know your new role."
+   - Show: "You exchanged your card with center card [X]. You don't know your new role." (persistently displayed)
 
 ### Demo
 **Backend:**
 ```bash
-# Troublemaker swaps two players
+# Troublemaker exchanges two players
 curl -X POST http://localhost:8000/api/games/{game_id}/players/{troublemaker_id}/troublemaker-action \
   -H "Content-Type: application/json" \
   -H "X-Player-ID: {troublemaker_id}" \
   -d '{"player1_id": "{p1_id}", "player2_id": "{p2_id}"}'
-# Expected: {"message": "Swapped two players"}
+# Expected: {"message": "Exchanged two players"}
 
-# Drunk swaps with center
+# Drunk exchanges with center
 curl -X POST http://localhost:8000/api/games/{game_id}/players/{drunk_id}/drunk-action \
   -H "Content-Type: application/json" \
   -H "X-Player-ID: {drunk_id}" \
@@ -972,18 +1033,18 @@ curl -X POST http://localhost:8000/api/games/{game_id}/players/{drunk_id}/drunk-
 ```
 
 **Frontend:**
-- Troublemaker: Select Bob and Charlie, see "You swapped Bob and Charlie"
-- Drunk: Click center card 2, see "You exchanged cards. You don't know your new role."
+- Troublemaker: Select Bob and Charlie, see "You swapped Bob and Charlie" (this information persists on their screen)
+- Drunk: Click center card 2, see "You exchanged your card with center card 2. You don't know your new role." (this information persists)
 
 ---
 
-## Step 10: Night Phase - Insomniac (View After Swaps)
+## Step 10: Night Phase - Insomniac (View After Actions)
 
 ### Backend Tasks
 1. **Write Tests First** (`tests/test_insomniac.py`)
    ```python
    def test_insomniac_sees_current_role():
-       # Setup: Game where Insomniac was swapped by Troublemaker
+       # Setup: Game where Insomniac was exchanged by Troublemaker
        game_id = ...
        insomniac_id = ...
 
@@ -1012,7 +1073,7 @@ curl -X POST http://localhost:8000/api/games/{game_id}/players/{drunk_id}/drunk-
    ```
 
 2. **Implement Insomniac logic**
-   - Show Insomniac their current role (after all swaps)
+   - Show Insomniac their current role (after all actions)
    - Mark Insomniac complete
    - Transition to DAY_DISCUSSION when complete
 
@@ -1022,7 +1083,7 @@ curl -X POST http://localhost:8000/api/games/{game_id}/players/{drunk_id}/drunk-
 ### Frontend Tasks
 1. **Create Insomniac Turn UI**
    - Show: "You wake up and check your card"
-   - Display current role (may be different from initial)
+   - Display current role (may be different from initial): "Your current role is: [ROLE]" (persistently displayed)
    - "Continue" button
 
 ### Demo
@@ -1031,7 +1092,7 @@ curl -X POST http://localhost:8000/api/games/{game_id}/players/{drunk_id}/drunk-
 # Insomniac views current role
 curl http://localhost:8000/api/games/{game_id}/players/{insomniac_id}/insomniac-view \
   -H "X-Player-ID: {insomniac_id}"
-# Expected: {"current_role": "Robber"}  # (was swapped during night)
+# Expected: {"current_role": "Robber"}  # (was exchanged during night)
 
 # Acknowledge
 curl -X POST http://localhost:8000/api/games/{game_id}/players/{insomniac_id}/acknowledge \
@@ -1043,7 +1104,7 @@ curl http://localhost:8000/api/games/{game_id}
 ```
 
 **Frontend:**
-- Insomniac sees: "You wake up. Your current role is: ROBBER"
+- Insomniac sees: "You wake up. Your current role is: ROBBER" (this information persists on their screen)
 - Click "Continue"
 - Transition to Day Discussion phase
 
@@ -1103,16 +1164,19 @@ curl http://localhost:8000/api/games/{game_id}
    - `GET /api/games/{game_id}/discussion-status` - Get timer status
 
 ### Frontend Tasks
-1. **Create Discussion Phase UI**
+1. **Update Unified Game Screen for Discussion Phase** (when state = DAY_DISCUSSION)
+   - Screen automatically adapts when game state changes to DAY_DISCUSSION
    - Show "Day Phase - Discussion" header
    - Display countdown timer (MM:SS format)
-   - Show all players around game board
+   - **Player buttons**: All visible but disabled (no actions available, for reference only)
+   - **Center card buttons**: Disabled (not relevant during discussion)
+   - **Accrued Actions Section**: Still visible (showing night phase actions)
    - Chat box for discussion (prominent)
    - All cards face-down (no roles visible)
 
 2. **Auto-transition when timer expires**
-   - Poll discussion status
-   - When time reaches 0, transition to Voting UI
+   - Poll game state (`/api/games/{game_id}`)
+   - When state changes to DAY_VOTING, screen automatically adapts
 
 ### Demo
 **Backend:**
@@ -1210,18 +1274,21 @@ curl http://localhost:8000/api/games/{game_id}
    - `GET /api/games/{game_id}/votes` - Get vote status
 
 ### Frontend Tasks
-1. **Create Voting Phase UI**
+1. **Update Unified Game Screen for Voting Phase** (when state = DAY_VOTING)
+   - Screen automatically adapts when game state changes to DAY_VOTING
    - Show "Day Phase - Voting" header
-   - Display all players around board
-   - Clickable player avatars (vote by clicking)
+   - **Player buttons**: All enabled (click to vote)
+   - **Center card buttons**: Disabled (not relevant during voting)
+   - **Accrued Actions Section**: Still visible (showing night phase actions)
+   - Click player button to vote
    - Confirmation dialog: "Vote to kill [player]?"
    - Show vote status: "3/5 players have voted"
    - No chat during voting (disabled)
 
 2. **Real-time vote updates**
-   - Poll vote status
+   - Poll vote status (`/api/games/{game_id}/votes`)
    - Show checkmarks on players who voted
-   - Auto-transition when all votes cast
+   - When all votes cast, game state changes to RESULTS (screen transitions to Results screen)
 
 ### Demo
 **Backend:**
@@ -1330,7 +1397,7 @@ curl http://localhost:8000/api/games/{game_id}
 2. **Implement win condition logic**
    - Count votes, determine who dies (ties = all tied players die)
    - Apply Hunter effect (if Hunter dies, kill their vote target too)
-   - Determine final roles for all players (after night swaps)
+   - Determine final roles for all players (after night actions)
    - Determine teams (village, werewolf, tanner)
    - Calculate winners based on rules:
      - Village wins: at least one werewolf dies
@@ -1749,18 +1816,21 @@ curl http://localhost:8000/api/game-sets/{game_set_id}/chat
 
 2. **Implement additional roles**
    - Minion: Auto-show werewolves (similar to werewolf info display)
+     - **Important**: Create an action record (VIEW_CARD type) for the Minion showing they viewed the werewolves. This information persists on their screen.
    - Mason: Auto-show other mason
+     - **Important**: Create a separate action record (VIEW_CARD type) for each Mason showing they viewed the other Mason (or that the other Mason is in the center). Both Masons have their action information persisted and displayed.
    - Tanner: Special win condition (only wins if dies, everyone else loses)
    - Hunter: Kill vote target if Hunter dies
    - Update win condition logic
 
 3. **Update night phase orchestration**
-   - Add roles to wake order (Minion after Werewolf, Mason after Minion)
+   - Add roles to roles table with correct wake_order values (Minion after Werewolf, Mason after Minion)
+   - Wake order automatically determined from roles table (no hardcoded list)
 
 ### Frontend Tasks
 1. **Create role-specific UI**
-   - Minion turn: "You are the Minion. The werewolves are: [names]"
-   - Mason turn: "You are a Mason. The other Mason is: [name]"
+   - Minion turn: Show "You are the Minion. The werewolves are: [names]" (persistently displayed)
+   - Mason turn: Show "You are a Mason. The other Mason is: [name]" (or "The other Mason is in the center" if applicable) (persistently displayed)
    - Tanner: No night action (just reveal)
    - Hunter: No night action (just reveal)
 
@@ -1782,8 +1852,9 @@ curl http://localhost:8000/api/games/{game_id}/results
 ```
 
 **Frontend:**
-- Minion sees: "You are the Minion. The werewolves are: Alice, Bob"
-- Mason sees: "You are a Mason. The other Mason is: Charlie"
+- Minion sees: "You are the Minion. The werewolves are: Alice, Bob" (this information persists on their screen)
+- Mason sees: "You are a Mason. The other Mason is: Charlie" (this information persists on their screen)
+- OR if other Mason is in center: "You are a Mason. The other Mason is in the center" (persists)
 - Results: "TANNER WINS!" (if Tanner died)
 
 ---

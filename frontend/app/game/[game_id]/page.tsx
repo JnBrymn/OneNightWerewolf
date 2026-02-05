@@ -19,6 +19,13 @@ interface NightStatus {
   roles_in_game: string[]
 }
 
+interface NightInfo {
+  role: string
+  is_lone_wolf?: boolean
+  other_werewolves?: { player_id: string, player_name: string | null }[]
+  night_action_completed?: boolean
+}
+
 // Role descriptions to help players understand their role
 const ROLE_DESCRIPTIONS: { [key: string]: string } = {
   'Werewolf': 'You are a Werewolf. Wake up and look for other Werewolves. If you are alone, you may view one center card.',
@@ -49,6 +56,11 @@ export default function Game() {
 
   const [playerRole, setPlayerRole] = useState<PlayerRole | null>(null)
   const [nightStatus, setNightStatus] = useState<NightStatus | null>(null)
+  const [nightInfo, setNightInfo] = useState<NightInfo | null>(null)
+  const [viewedCenterRole, setViewedCenterRole] = useState<string | null>(null)
+  const [selectedCenterIndex, setSelectedCenterIndex] = useState<number | null>(null)
+  const [actionError, setActionError] = useState('')
+  const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [showRoleReveal, setShowRoleReveal] = useState(true)
@@ -120,6 +132,88 @@ export default function Game() {
 
     return () => clearInterval(interval)
   }, [game_id, showRoleReveal])
+
+  // Fetch night info for werewolf during their turn
+  useEffect(() => {
+    if (!game_id || !currentPlayerId || !nightStatus?.current_role || !playerRole) {
+      return
+    }
+
+    if (nightStatus.current_role !== 'Werewolf') {
+      setNightInfo(null)
+      setViewedCenterRole(null)
+      setSelectedCenterIndex(null)
+      setActionError('')
+      return
+    }
+
+    if (playerRole.current_role !== 'Werewolf') {
+      setNightInfo(null)
+      return
+    }
+
+    async function fetchNightInfo() {
+      try {
+        const response = await fetch(`/api/games/${game_id}/players/${currentPlayerId}/night-info`)
+        if (!response.ok) {
+          throw new Error('Failed to fetch night info')
+        }
+        const data = await response.json()
+        setNightInfo(data)
+      } catch (err: any) {
+        setActionError(err.message)
+      }
+    }
+
+    fetchNightInfo()
+  }, [game_id, currentPlayerId, nightStatus?.current_role, playerRole])
+
+  async function handleViewCenter(cardIndex: number) {
+    if (!currentPlayerId || !game_id) return
+    setActionLoading(true)
+    setActionError('')
+    setSelectedCenterIndex(cardIndex)
+
+    try {
+      const response = await fetch(`/api/games/${game_id}/players/${currentPlayerId}/view-center`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_index: cardIndex })
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data?.detail || 'Failed to view center card')
+      }
+      const data = await response.json()
+      setViewedCenterRole(data.role)
+      setNightInfo((prev) => prev ? { ...prev, night_action_completed: true } : prev)
+    } catch (err: any) {
+      setActionError(err.message)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleAcknowledge() {
+    if (!currentPlayerId || !game_id) return
+    setActionLoading(true)
+    setActionError('')
+
+    try {
+      const response = await fetch(`/api/games/${game_id}/players/${currentPlayerId}/acknowledge`, {
+        method: 'POST'
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data?.detail || 'Failed to acknowledge')
+      }
+      setNightInfo((prev) => prev ? { ...prev, night_action_completed: true } : prev)
+    } catch (err: any) {
+      setActionError(err.message)
+    } finally {
+      setActionLoading(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -280,6 +374,9 @@ export default function Game() {
   }
 
   // Show night phase UI
+  const isWerewolfTurn = nightStatus?.current_role === 'Werewolf'
+  const isWerewolfPlayer = playerRole.current_role === 'Werewolf'
+
   return (
     <main style={{
       padding: '2rem',
@@ -334,25 +431,107 @@ export default function Game() {
               marginBottom: '2rem',
               lineHeight: '1.6'
             }}>
-              Waiting for <strong style={{ color: '#ffffff' }}>{nightStatus.current_role}</strong> to complete their action...
+              {isWerewolfTurn && isWerewolfPlayer ? 'Your turn as Werewolf' : (
+                <>Waiting for <strong style={{ color: '#ffffff' }}>{nightStatus.current_role}</strong> to complete their action...</>
+              )}
             </div>
 
-            {/* Loading spinner */}
-            <div style={{
-              width: '50px',
-              height: '50px',
-              border: '5px solid #0f3460',
-              borderTop: '5px solid #e94560',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              margin: '0 auto'
-            }} />
-            <style jsx>{`
-              @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-              }
-            `}</style>
+            {isWerewolfTurn && isWerewolfPlayer ? (
+              <div style={{
+                marginTop: '1.5rem',
+                padding: '1.5rem',
+                backgroundColor: '#0f3460',
+                borderRadius: '12px',
+                textAlign: 'left'
+              }}>
+                {nightInfo?.is_lone_wolf ? (
+                  <>
+                    <div style={{ color: '#ffffff', fontWeight: 'bold', marginBottom: '1rem' }}>
+                      You are the lone Werewolf. Choose one center card to view.
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
+                      {['Left', 'Center', 'Right'].map((label, index) => (
+                        <button
+                          key={label}
+                          onClick={() => handleViewCenter(index)}
+                          disabled={actionLoading || nightInfo?.night_action_completed}
+                          style={{
+                            padding: '0.5rem 1rem',
+                            backgroundColor: selectedCenterIndex === index ? '#e94560' : '#34495e',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: actionLoading ? 'not-allowed' : 'pointer',
+                            opacity: nightInfo?.night_action_completed ? 0.6 : 1
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {viewedCenterRole && (
+                      <div style={{ color: '#a8ffef', fontWeight: 'bold' }}>
+                        Center card role: {viewedCenterRole}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div style={{ color: '#ffffff', fontWeight: 'bold', marginBottom: '0.75rem' }}>
+                      Your fellow Werewolves:
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '1.2rem', color: '#a8b2d1' }}>
+                      {nightInfo?.other_werewolves?.length ? nightInfo.other_werewolves.map((w) => (
+                        <li key={w.player_id}>{w.player_name || w.player_id}</li>
+                      )) : (
+                        <li>None detected</li>
+                      )}
+                    </ul>
+                    <button
+                      onClick={handleAcknowledge}
+                      disabled={actionLoading || nightInfo?.night_action_completed}
+                      style={{
+                        marginTop: '1rem',
+                        padding: '0.6rem 1.2rem',
+                        backgroundColor: '#e94560',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: actionLoading ? 'not-allowed' : 'pointer',
+                        opacity: nightInfo?.night_action_completed ? 0.6 : 1
+                      }}
+                    >
+                      Continue
+                    </button>
+                  </>
+                )}
+
+                {actionError && (
+                  <div style={{ marginTop: '0.75rem', color: '#ffb3b3' }}>
+                    {actionError}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* Loading spinner */}
+                <div style={{
+                  width: '50px',
+                  height: '50px',
+                  border: '5px solid #0f3460',
+                  borderTop: '5px solid #e94560',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                  margin: '0 auto'
+                }} />
+                <style jsx>{`
+                  @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                  }
+                `}</style>
+              </>
+            )}
 
             {/* Progress indicator */}
             <div style={{

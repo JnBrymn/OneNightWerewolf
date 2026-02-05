@@ -6,6 +6,20 @@ from models.game_set import GameSet
 from models.player_role import PlayerRole
 from models.center_card import CenterCard
 
+# Official wake order from One Night Ultimate Werewolf (instructions.md)
+# This should eventually come from the roles table ordered by wake_order
+WAKE_ORDER = [
+    "Doppelganger",
+    "Werewolf",
+    "Minion",
+    "Mason",
+    "Seer",
+    "Robber",
+    "Troublemaker",
+    "Drunk",
+    "Insomniac",
+]
+
 
 def start_game(db: Session, game_set_id: str) -> Game:
     """
@@ -92,6 +106,21 @@ def start_game(db: Session, game_set_id: str) -> Game:
             role=role
         )
         db.add(center_card)
+
+    # Create ordered list of active roles (roles with wake_order) in this game
+    # Get all unique roles from player roles and center cards
+    all_roles_in_game = set(player_roles + center_roles)
+    
+    # Only include roles that have wake_order (active roles that wake up at night)
+    # Order them according to wake_order sequence
+    active_roles = []
+    
+    for role in WAKE_ORDER:
+        if role in all_roles_in_game:
+            active_roles.append(role)
+    
+    # Set the active roles on the game
+    game.active_roles = active_roles
 
     db.commit()
     db.refresh(game)

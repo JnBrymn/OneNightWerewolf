@@ -37,24 +37,52 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
   - Discussion timer setting (time limit for Day Phase discussion)
   - Chat available for communication
 
-### 2. **Game Room**
-- **Main Game Container**: Orchestrates all game phases
-- **Visual Game Board**: 
-  - Player avatars (user images/logos/photos) arranged around board
-  - Player cards visible next to each avatar (for swapping actions during night phase)
-  - Center cards area (3 cards exist but are hidden/secret - shown as face-down placeholders)
-  - Cards show role names when revealed (face-up for actions, hidden during discussion)
-- **Host** (Automated): 
-  - Automated host persona with recorded audio instructions
-  - Host calls each role in sequence following rigid script (like traditional game announcer)
-  - Role action completion indicator (e.g., "Seer action complete" - does not reveal which players)
-  - Host automatically advances to next role when current role's action(s) complete
-  - Optional timer controls for phases
-- **Game & Score Display**:
-  - Current game number indicator (Game 1, Game 2, etc. within Game Set)
-  - Cumulative score board (wins/losses per player across all games in Game Set) - visible during all phases
-- **Phase Indicator**: Shows current game state (Night, Day Discussion, Day Voting, Results)
-- **Action Status**: Shows role-based completion (e.g., "Seer action complete") without revealing which players have which roles
+### 2. **Unified Game Screen** (Single Screen for All Game Phases)
+- **Single Adaptive Screen**: One game screen that works through all game states (NIGHT, DAY_DISCUSSION, DAY_VOTING) using the game's `state` and `current_role_step` fields to determine what's visible and active
+- **Always Visible Elements**:
+  - **All Players**: All players in the game are displayed as clickable buttons/avatars arranged around the board
+    - Buttons are **enabled** only when the current player can take an action on that player (based on game state and current role step)
+    - Buttons are **disabled** when no action is available for that player
+    - Player cards shown next to avatars (face-down during discussion, face-up when revealed by actions)
+  - **Center Cards**: Three center cards are always displayed as clickable buttons
+    - Buttons are **enabled** only when the current player can take an action with that center card (based on game state and current role step)
+    - Buttons are **disabled** when no action is available for that center card
+    - Cards shown as face-down placeholders (only revealed when a role action allows viewing)
+  - **Accrued Actions Display**: A persistent section listing all actions visible to the current player
+    - Shows information learned during night phase (e.g., "You are a Werewolf. Your fellow werewolves are: [names]", "You viewed Alice's card. It is: SEER")
+    - Actions persist and remain visible throughout the game (night phase through day phase)
+    - Each action is displayed as a readable statement of what the player learned
+  - **Phase Indicator**: Shows current game state (Night, Day Discussion, Day Voting)
+  - **Current Role Step**: When in NIGHT state, shows which role is currently active (`current_role_step` field)
+  - **Game & Score Display**:
+    - Current game number indicator (Game 1, Game 2, etc. within Game Set)
+    - Cumulative score board (wins/losses per player across all games in Game Set) - visible during all phases
+- **State-Based Behavior**:
+  - **NIGHT State**: 
+    - Screen adapts based on `current_role_step` field
+    - When it's a player's role turn: relevant player/center card buttons become enabled
+    - When not their turn: all buttons disabled, shows "Waiting for [role] to complete action..."
+    - Role-specific instructions displayed when it's the player's turn
+    - Host (automated) calls each role in sequence (via text/audio)
+  - **DAY_DISCUSSION State**:
+    - All player buttons enabled (for discussion reference, but no actions available)
+    - Center card buttons disabled (center cards not relevant during discussion)
+    - Timer countdown showing remaining discussion time
+    - Chat actively used for discussion
+    - Host automatically transitions to DAY_VOTING when timer expires
+  - **DAY_VOTING State**:
+    - All player buttons enabled (for voting - click to vote)
+    - Center card buttons disabled
+    - Vote confirmation dialog when clicking a player
+    - Vote status display (who voted for whom, updated in real-time)
+    - Chat disabled or restricted during voting
+    - Host automatically advances to RESULTS when all votes cast
+- **Action Enablement Logic**: Backend determines which buttons should be enabled based on:
+  - Current game `state` (NIGHT, DAY_DISCUSSION, DAY_VOTING)
+  - Current `current_role_step` (if state is NIGHT)
+  - Player's current role
+  - Whether player has already completed their required action
+  - Endpoint: `GET /api/games/{game_id}/players/{player_id}/available-actions` returns which players/center cards are actionable
 
 ### 3. **Role Assignment UI**
 - **Initial Role Reveal**: At start of game (before NIGHT phase), each player sees their own assigned role
@@ -62,51 +90,11 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
   - Brief explanation of role abilities
   - Player acknowledges they've seen their role
 - **Role Hidden After Reveal**: Once player acknowledges, their role card becomes hidden/face-down
-  - Role may change during night phase (via swaps), so it stays hidden
+  - Role may change during night phase (via actions), so it stays hidden
   - Player can only see their role again if their role allows viewing (e.g., Insomniac)
 - **Center Cards**: Never revealed - remain secret throughout game (shown as face-down placeholders)
 
-### 4. **Night Phase UI**
-- **General State** (when not your turn):
-  - Players see that night phase is happening
-  - Host audio plays for current role being called
-  - No specific information revealed until it's their turn
-  - Chat available for communication (though typically quiet during night phase)
-  - Chat available for communication (though typically quiet during night phase)
-- **Role-Specific Turn Display** (when it's your role's turn):
-  - **Automatic Information Roles** (no action required):
-    - **Werewolves** (multiple): Automatically shown who all other werewolves are
-    - **Werewolf** (lone wolf - only one werewolf): Must choose which center card to view (action required)
-    - **Minion**: Automatically shown who all the werewolves are
-    - **Masons**: Automatically shown who the other mason is (or that other mason is in center)
-  - **Action Required Roles**:
-    - **Seer**: Role-specific instructions displayed - choose to view one player card OR two center cards
-    - **Robber**: Role-specific instructions displayed - select player card to exchange with (swap cards, then view new card)
-    - **Troublemaker**: Role-specific instructions displayed - select two other player cards to swap (no viewing)
-    - **Drunk**: Role-specific instructions displayed - select center card to exchange with (no viewing of new card)
-    - **Werewolf (Lone Wolf)**: Role-specific instructions displayed - select one center card to view (their choice)
-    - **Insomniac**: Role-specific instructions displayed - view own current card
-- **Action Feedback**: Visual confirmation when action completes
-- **Center Cards**: Shown as face-down placeholders - only revealed when a role action allows viewing
-
-### 5. **Day Phase UI**
-- **Day Phase Sub-Phases**:
-  - A. **Discussion Phase**:
-    - Game board visible (cards face-down during discussion)
-    - Chat actively used for discussion and strategy
-    - Timer countdown showing remaining discussion time (set during game creation)
-    - Host automatically transitions to Voting when timer expires
-  - B. **Voting Phase**:
-    - Discussion ends - chat disabled or restricted during voting
-    - Voting Interface:
-      - Click player avatar/card to vote
-      - Vote confirmation dialog
-      - Vote status display (who voted for whom, updated in real-time)
-      - All players vote simultaneously (no discussion allowed)
-    - Host automatically advances to Results when all votes cast
-- **Vote Results Display**: Shows final vote counts when voting completes
-
-### 6. **Results Phase UI**
+### 4. **Results Phase UI**
 - **Results Screen**: 
   - Current game results:
     - Who died (if anyone)
@@ -123,11 +111,11 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
   - **Play Another Game Button**: Start another game in the same Game Set (creates new game, shuffles cards, assigns new roles, goes to NIGHT state)
   - **End Game Set Button**: End game set and return to lobby
 
-### 7. **Shared Components**
+### 5. **Shared Components**
 - **Player Avatar**: Visual representation of player (image/logo/photo)
 - **Card Component**: Reusable card UI for roles (face-up/face-down states)
 - **Game Board Layout**: Arranges players and center cards visually
-- **Drag and Drop**: For card swapping actions (optional, can use click/select)
+- **Drag and Drop**: For card exchange actions (optional, can use click/select)
 - **Modal/Dialog**: For actions and confirmations
 - **Chat Component**: 
   - **Always Available**: Persistent chat interface visible on all screens and phases
@@ -179,6 +167,12 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
 
 ### 4. **Gameplay Phase Orchestration**
 - **Host (Automated)**: Host persona automatically advances phases following rigid script
+- **Unified Screen State Management**: 
+  - Screen adapts based on game `state` (NIGHT, DAY_DISCUSSION, DAY_VOTING, RESULTS) and `current_role_step` (when in NIGHT)
+  - `GET /api/games/{game_id}/players/{player_id}/available-actions` - Returns which players/center cards are actionable for the current player
+    - Response includes: `{ "actionable_players": [...], "actionable_center_cards": [...], "instructions": "..." }`
+  - `GET /api/games/{game_id}/players/{player_id}/actions` - Returns all accrued actions visible to the player
+    - Response includes list of action records that should be displayed persistently
 - **Action Status Tracking**:
   - `GET /api/games/{game_id}/action-status` - Get role-based completion status (e.g., "Seer: complete", "Werewolves: complete") without revealing player identities
   - Host monitors completion and automatically advances when all required actions complete
@@ -193,15 +187,17 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
     7. Drunk
     8. Insomniac
   - Host calls each role in sequence (via text on screen originally and eventually by recorded audio)
+  - Updates `current_role_step` field in Game table to track which role is active
   - **Information Display Roles** (automatic, no action required):
     - **Werewolves** (multiple - 2+): System automatically displays to all werewolves who the other werewolves are
     - **Minion**: System automatically displays to minion who all the werewolves are
     - **Masons**: System automatically displays to masons who the other mason is (or that other mason is in center)
     - These roles complete immediately (no waiting for player action - the indicators remain on their screen throughout the game)
+    - Actions are recorded in Action table and displayed in accrued actions section
   - **Action Required Roles**:
     - **Werewolf (Lone Wolf - only 1 werewolf)**: Must choose which center card to view (player's choice, action required)
     - **Seer**: View one player card OR 2 center cards (no moving)
-    - **Robber**: Exchange card with player (swap) AND view new card
+    - **Robber**: Exchange card with player AND view new card
     - **Troublemaker**: Exchange two other players' cards (no viewing)
     - **Drunk**: Exchange with center card (no viewing)
     - **Insomniac**: View own current card
@@ -209,20 +205,22 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
   - **Action Completion Tracking**: Track which players have completed required actions (backend only - never exposed to frontend)
   - **Role Completion Status**: Aggregate player completions into role-based status (e.g., "Seer has acted") for host progression
   - **Host Progression**: Host automatically advances to next role when current role completes (immediate for info roles, after action for action roles)
-  - **State Updates**: Apply actions to game state (card swaps, views)
+  - **State Updates**: Apply actions to game state (card exchanges, views), update `current_role_step` as roles complete
 - **Day Phase Manager**:
-  - **Discussion Phase**:
+  - **Discussion Phase** (state = DAY_DISCUSSION):
     - Timer countdown (time limit set during game creation)
     - Chat enabled for discussion
-    - Host automatically transitions to Voting when timer expires
-  - **Voting Phase**:
+    - All player buttons visible but no actions available (for reference only)
+    - Host automatically transitions to Voting when timer expires (updates state to DAY_VOTING)
+  - **Voting Phase** (state = DAY_VOTING):
     - **Voting System**:
-      - `POST /api/games/{game_id}/vote` - Submit vote
+      - `POST /api/games/{game_id}/vote` - Submit vote (clicking enabled player button)
       - `GET /api/games/{game_id}/votes` - Get current votes
     - Chat disabled/restricted during voting (no discussion)
+    - All player buttons enabled (for voting)
     - All players vote simultaneously
     - **Vote Counting**: Determine who dies (tie resolution)
-    - **Host Progression**: Host automatically advances to Results when all votes cast
+    - **Host Progression**: Host automatically advances to Results when all votes cast (updates state to RESULTS)
 
 ### 6. **Win Condition Logic**
 - **Team Assignment**: Determine final team for each player
@@ -252,12 +250,22 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
 
 ## Data Persistence
 
+### 0. **Role Definitions** (Reference data for all roles)
+- **Roles Table**:
+  - `role_id` (String, primary key: role name, e.g., "Werewolf", "Seer", "Villager")
+  - `has_action` (Boolean: whether this role wakes up during night phase)
+  - `wake_order` (Integer, nullable: position in night wake sequence, null if has_action=false)
+  - `team` (String: "village", "werewolf", or "tanner")
+  - `description` (String, nullable: role description for UI display)
+- **Available Roles**: Werewolf, Villager, Seer, Robber, Troublemaker, Minion, Mason, Drunk, Insomniac, Tanner, Hunter (refer to instructions.md)
+- **Benefits**: Centralizes role metadata, enables querying by properties (e.g., "all roles that wake up"), ensures data integrity via foreign keys, and makes it easy to add new roles or properties without code changes
+
 ### 1. **Game Set Storage** (Groups multiple games together)
 - **Game Set Table**:
   - `game_set_id` (UUID, primary key)
   - `created_by` (user/session ID of game set creator)
   - `num_players` (integer: number of players in this set)
-  - `selected_roles` (JSON: array of role names selected for games in this set)
+  - `selected_roles` (JSON: array of role_id values selected for games in this set, references roles.role_id)
   - `discussion_timer_seconds` (integer: discussion time limit)
   - `created_at`, `updated_at`
   - `ended_at` (timestamp: when game set ended, null if active)
@@ -268,9 +276,14 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
   - `game_set_id` (foreign key: which game set this game belongs to)
   - `game_number` (integer: sequence number within game set, 1, 2, 3, etc.)
   - `state` (enum: NIGHT, DAY_DISCUSSION, DAY_VOTING, RESULTS)
-  - `current_role_step` (which role in the night sequence is currently active - only set when state is NIGHT)
+  - `current_role_step` (String, foreign key to roles.role_id: which role in the night sequence is currently active - only set when state is NIGHT)
+  - `active_roles` (JSON: array of role_id strings) - Ordered list of active roles (roles with wake_order) present in this game (from both player roles and center cards), ordered by wake_order from the roles table. Created when all players have been assigned roles. Only includes roles that wake up at night (has_action=true). This provides a canonical ordering of active roles for the game.
+  - `card_0_role` (String, foreign key to roles.role_id: role of center card at index 0 - kept secret, never exposed to players, updated when actions occur)
+  - `card_1_role` (String, foreign key to roles.role_id: role of center card at index 1 - kept secret, never exposed to players, updated when actions occur)
+  - `card_2_role` (String, foreign key to roles.role_id: role of center card at index 2 - kept secret, never exposed to players, updated when actions occur)
   - `created_at`, `updated_at`
   - `ended_at` (timestamp: when game ended)
+- **Note**: When an action occurs (e.g., Drunk exchanges with center card), update the corresponding `card_X_role` field to reflect the new card in that center position. These fields always represent the current state of the 3 center positions. Center card roles are never revealed to players (only used internally for night actions like Seer viewing or Drunk exchanging).
 
 ### 3. **Player Identity** (Persistent across game sets)
 - **Player Table**:
@@ -285,26 +298,31 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
   - `player_role_id` (UUID, primary key)
   - `game_id` (foreign key: which game this role is for)
   - `player_id` (foreign key: which player)
-  - `initial_role` (initial role assignment - only visible to that player)
-  - `final_role` (after all night actions - revealed at Results phase)
+  - `initial_role` (String, foreign key to roles.role_id: initial role assignment - only visible to that player)
+  - `current_role` (String, foreign key to roles.role_id: current role after night actions - can change during night phase)
   - `role_revealed` (boolean: whether player has seen their initial role)
-  - `team` (village/werewolf/tanner)
+  - `team` (String: "village", "werewolf", or "tanner" - can be derived from role but cached for performance)
   - `was_killed` (boolean: whether player was killed at end of game)
+  - `night_action_completed` (boolean: whether player has completed their night action/acknowledgment)
+- **Note**: Player roles reference the roles table via foreign keys, ensuring data consistency. When a player's card is changed via an action, the `current_role` should be updated accordingly. The `team` field can be derived from the role's team property but is cached for query performance.
 
-### 5. **Card Swaps** (Night Phase Mutations)
-- **Card Swap Table**:
-  - `swap_id` (UUID, primary key)
-  - `game_id` (foreign key: which game this swap occurred in)
-  - `swapper_player_role_id` (player_role_id: who performed the swap - Robber, Troublemaker, or Drunk)
-  - `swap_type` (enum: PLAYER_TO_PLAYER, PLAYER_TO_CENTER, CENTER_TO_PLAYER)
-  - `source_type` (enum: PLAYER, CENTER)
-  - `source_player_role_id` (player_role_id if source is player, null if center)
-  - `source_center_index` (0, 1, or 2 if source is center, null if player)
-  - `target_type` (enum: PLAYER, CENTER)
-  - `target_player_role_id` (player_role_id if target is player, null if center)
-  - `target_center_index` (0, 1, or 2 if target is center, null if player)
+### 5. **Actions** (Night Phase Mutations)
+- **Action Table**:
+  - `action_id` (UUID, primary key)
+  - `game_id` (foreign key: which game this action occurred in)
+  - `player_id` (foreign key: which player performed the action)
+  - `action_type` (enum: SWAP_PLAYER_TO_PLAYER, SWAP_PLAYER_TO_CENTER, VIEW_CARD)
+  - `source_id` (string: player_id if source is a player, or "0"/"1"/"2" if source is a center card)
+  - `target_id` (string: player_id if target is a player, or "0"/"1"/"2" if target is a center card, or "" if action_type is VIEW_CARD)
+  - `source_role` (String, foreign key to roles.role_id: role of the source card)
+  - `target_role` (String, foreign key to roles.role_id, nullable: role of the target card, or null if action_type is VIEW_CARD)
   - `timestamp`
-- **Note**: Card views (Seer, Werewolves, Minion, Masons, Insomniac) are not tracked - they are ephemeral information display only and don't mutate game state
+- **Multiple Actions Per Player/Role**:
+  - **Multiple Werewolves**: When there are 2+ werewolves, each werewolf gets a separate action record (VIEW_CARD type) showing they viewed the other werewolves. This ensures each werewolf has their action information persisted and displayed on their screen throughout the game.
+  - **Seer Viewing Two Center Cards**: When the Seer chooses to view two center cards, create two separate action records (one per center card viewed). Both actions are persisted and displayed on the Seer's screen so they can reference both pieces of information.
+  - **Masons**: Each Mason gets a separate action record (VIEW_CARD type) showing they viewed the other Mason (or that the other Mason is in the center). Both Masons have their action information persisted and displayed.
+  - **Minion**: The Minion gets an action record (VIEW_CARD type) showing they viewed the werewolves (one action for each werewolf). This information persists on their screen.
+  - **Note**: All action records are used to display persistent information on each player's screen during the night phase and into the day phase, allowing players to reference what they learned during their turn.
 
 ### 6. **Votes**
 - **Vote Table**:
@@ -314,16 +332,7 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
   - `target_player_role_id` (player_role_id: who was voted for)
   - `timestamp`
 
-### 7. **Center Cards** (Current state of the 3 center positions)
-- **Center Card Table**:
-  - `center_card_id` (UUID, primary key)
-  - `game_id` (foreign key: which game these cards belong to)
-  - `card_index` (0, 1, or 2)
-  - `role` (role name - kept secret, never exposed to players, updated when swaps occur)
-- **Note**: When a swap occurs (e.g., Drunk swaps with center card), update the center card's `role` to reflect the card that ends up in that center position. This table always represents the current state of the 3 center positions.
-- **Privacy**: Center card roles are never revealed to players (only used internally for night actions like Seer viewing or Drunk swapping)
-
-### 8. **Chat Messages** (Optional - can be ephemeral)
+### 7. **Chat Messages** (Optional - can be ephemeral)
 - **Chat Message Table**:
   - `message_id` (UUID, primary key)
   - `game_set_id` (foreign key: chat persists across games in a set)
@@ -331,7 +340,7 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
   - `message` (text content)
   - `timestamp`
 
-### 9. **Score Calculation** (Computed on-demand, no separate table)
+### 8. **Score Calculation** (Computed on-demand, no separate table)
 - **Cumulative scores computed from existing tables**:
   - Query Player Role table for all games in a Game Set
   - Join with Votes table to determine who died in each game
@@ -374,7 +383,7 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
 
 1. **Night Action Sequencing**: Ensuring actions happen in correct order during gameplay night phase
 3. **State Consistency**: All players see same state
-4. **Role Swapping**: Tracking role changes through gameplay night phase
+4. **Role Changes**: Tracking role changes through gameplay night phase via actions
 5. **Team Assignment**: Determining final teams after all actions
 6. **Win Conditions**: Handling edge cases (no werewolves, minion scenarios)
 7. **Gameplay Phase Transitions**: Smoothly transitioning from night to day sub-phases

@@ -63,3 +63,13 @@ class GameSetResponse(BaseModel):
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
     ended_at: Optional[datetime]
+
+
+class NightStatusCompleteRequest(BaseModel):
+    """Schema for marking a night role complete."""
+    role: str = Field(..., min_length=1, description="Role name to mark complete")
+
+
+class ViewCenterRequest(BaseModel):
+    """Schema for viewing a center card (lone werewolf)."""
+    card_index: int = Field(..., ge=0, le=2, description="Center card index (0-2)")
