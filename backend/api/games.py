@@ -8,6 +8,14 @@ from services import game_service, night_service, werewolf_service
 
 router = APIRouter(prefix="/api/games", tags=["games"])
 
+@router.get("/{game_id}")
+def get_game(game_id: str, db: Session = Depends(get_db)):
+    """Get a game by ID."""
+    game = db.query(Game).filter(Game.game_id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return game.to_dict()
+
 
 @router.get("/{game_id}/players/{player_id}/role")
 def get_player_role(game_id: str, player_id: str, db: Session = Depends(get_db)):

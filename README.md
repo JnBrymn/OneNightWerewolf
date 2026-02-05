@@ -1,6 +1,11 @@
 # One Night Werewolf
 
-A digital implementation of the One Night Ultimate Werewolf card game.
+A digital implementation of the One Night Ultimate Werewolf card game. Built with Next.js (frontend) and FastAPI (backend).
+
+## Documentation
+
+- **Product Design**: See `product/product_design.md` for game rules, UI/UX specs, and architecture
+- **Implementation Steps**: See `product/implementation_steps.md` for the development roadmap
 
 ## Quick Start
 
@@ -11,7 +16,14 @@ Start both servers:
 - Backend: http://localhost:8000
 - Frontend: http://localhost:3000
 
-## Manual Start
+## Scripts
+
+- **`start_servers.sh`** - Starts both backend and frontend dev servers with dependency checks
+- **`deploy_fly.sh`** - Deploys the app to Fly.io (checks auth, creates app if needed)
+- **`dev_seed_game.sh`** - Creates a test game with players for development/testing
+- **`start_prod.sh`** - Production startup script for Fly.io (runs both servers)
+
+## Development
 
 Backend:
 ```bash
@@ -25,17 +37,10 @@ cd frontend
 npm run dev
 ```
 
-## Tests
-
-Backend tests:
+Tests:
 ```bash
 cd backend
 uv run pytest tests/ -v
-```
-
-Run a specific test file:
-```bash
-uv run pytest tests/test_players.py -v
 ```
 
 ## API Docs
@@ -44,15 +49,9 @@ When the backend is running:
 - Interactive docs: http://localhost:8000/docs
 - Health check: http://localhost:8000/health
 
-## Deployment (Fly.io)
+## Deployment
 
+Deploy to Fly.io:
 ```bash
 ./scripts/deploy_fly.sh
-```
-
-Or manually:
-```bash
-fly auth login
-fly apps create onw-app
-fly deploy
 ```

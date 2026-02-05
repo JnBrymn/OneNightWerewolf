@@ -19,6 +19,25 @@ interface NightStatus {
   roles_in_game: string[]
 }
 
+interface Game {
+  game_id: string
+  game_set_id: string
+  state: string | null
+  current_role_step: string | null
+}
+
+interface Player {
+  player_id: string
+  player_name: string
+  avatar_url: string | null
+}
+
+interface PlayersResponse {
+  players: Player[]
+  current_count: number
+  required_count: number
+}
+
 interface NightInfo {
   role: string
   is_lone_wolf?: boolean
@@ -55,9 +74,13 @@ export default function Game() {
   const game_id = params.game_id as string
 
   const [playerRole, setPlayerRole] = useState<PlayerRole | null>(null)
+  const [game, setGame] = useState<Game | null>(null)
+  const [playersData, setPlayersData] = useState<PlayersResponse | null>(null)
   const [nightStatus, setNightStatus] = useState<NightStatus | null>(null)
   const [nightInfo, setNightInfo] = useState<NightInfo | null>(null)
   const [viewedCenterRole, setViewedCenterRole] = useState<string | null>(null)
+  const [persistedWerewolfInfo, setPersistedWerewolfInfo] = useState<NightInfo | null>(null)
+  const [persistedCenterRole, setPersistedCenterRole] = useState<string | null>(null)
   const [selectedCenterIndex, setSelectedCenterIndex] = useState<number | null>(null)
   const [actionError, setActionError] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
@@ -68,6 +91,26 @@ export default function Game() {
   // Get current player ID from URL first, then fall back to sessionStorage
   const currentPlayerId = searchParams.get('player_id') ||
     (typeof window !== 'undefined' ? sessionStorage.getItem('player_id') : null)
+
+  // Fetch game data for game_set_id
+  useEffect(() => {
+    async function fetchGame() {
+      try {
+        const response = await fetch(`/api/games/${game_id}`)
+        if (!response.ok) {
+          throw new Error('Failed to fetch game')
+        }
+        const data = await response.json()
+        setGame(data)
+      } catch (err: any) {
+        setError(err.message)
+      }
+    }
+
+    if (game_id) {
+      fetchGame()
+    }
+  }, [game_id])
 
   // Fetch player's role
   useEffect(() => {
@@ -96,6 +139,26 @@ export default function Game() {
       fetchPlayerRole()
     }
   }, [game_id, currentPlayerId])
+
+  // Poll players list for unified game screen
+  useEffect(() => {
+    if (!game?.game_set_id) return
+
+    async function fetchPlayers() {
+      try {
+        const response = await fetch(`/api/game-sets/${game.game_set_id}/players`)
+        if (!response.ok) throw new Error('Failed to fetch players')
+        const data = await response.json()
+        setPlayersData(data)
+      } catch (err) {
+        console.error('Failed to fetch players:', err)
+      }
+    }
+
+    fetchPlayers()
+    const interval = setInterval(fetchPlayers, 2000)
+    return () => clearInterval(interval)
+  }, [game?.game_set_id])
 
   // Poll night phase status
   useEffect(() => {
@@ -140,10 +203,6 @@ export default function Game() {
     }
 
     if (nightStatus.current_role !== 'Werewolf') {
-      setNightInfo(null)
-      setViewedCenterRole(null)
-      setSelectedCenterIndex(null)
-      setActionError('')
       return
     }
 
@@ -160,6 +219,7 @@ export default function Game() {
         }
         const data = await response.json()
         setNightInfo(data)
+        setPersistedWerewolfInfo((prev) => prev ?? data)
       } catch (err: any) {
         setActionError(err.message)
       }
@@ -186,6 +246,7 @@ export default function Game() {
       }
       const data = await response.json()
       setViewedCenterRole(data.role)
+      setPersistedCenterRole(data.role)
       setNightInfo((prev) => prev ? { ...prev, night_action_completed: true } : prev)
     } catch (err: any) {
       setActionError(err.message)
@@ -208,6 +269,9 @@ export default function Game() {
         throw new Error(data?.detail || 'Failed to acknowledge')
       }
       setNightInfo((prev) => prev ? { ...prev, night_action_completed: true } : prev)
+      if (nightInfo) {
+        setPersistedWerewolfInfo((prev) => prev ?? nightInfo)
+      }
     } catch (err: any) {
       setActionError(err.message)
     } finally {
@@ -215,7 +279,7 @@ export default function Game() {
     }
   }
 
-  if (loading) {
+  if (loading || !game || !playersData) {
     return (
       <main style={{
         padding: '2rem',
@@ -267,132 +331,162 @@ export default function Game() {
   const teamColor = TEAM_COLORS[playerRole.team] || '#34495e'
   const roleDescription = ROLE_DESCRIPTIONS[playerRole.initial_role] || 'No description available.'
 
-  // Show role reveal screen initially
-  if (showRoleReveal || !nightStatus) {
-    return (
-      <main style={{
-        padding: '2rem',
-        fontFamily: 'Arial, sans-serif',
-        maxWidth: '600px',
-        margin: '0 auto',
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <div style={{
-          backgroundColor: '#f8f9fa',
-          padding: '3rem',
-          borderRadius: '16px',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-          textAlign: 'center',
-          width: '100%'
-        }}>
-          <h1 style={{
-            fontSize: '2.5rem',
-            marginBottom: '1rem',
-            color: '#2c3e50'
-          }}>
-            Your Role
-          </h1>
-
-          <div style={{
-            fontSize: '4rem',
-            fontWeight: 'bold',
-            color: teamColor,
-            marginBottom: '1.5rem',
-            padding: '1rem',
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            border: `4px solid ${teamColor}`
-          }}>
-            {playerRole.initial_role}
-          </div>
-
-          <div style={{
-            backgroundColor: 'white',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            marginBottom: '1.5rem',
-            textAlign: 'left'
-          }}>
-            <p style={{
-              fontSize: '1.1rem',
-              lineHeight: '1.6',
-              color: '#34495e',
-              margin: 0
-            }}>
-              {roleDescription}
-            </p>
-          </div>
-
-          <div style={{
-            display: 'inline-block',
-            padding: '0.75rem 1.5rem',
-            backgroundColor: teamColor,
-            color: 'white',
-            borderRadius: '8px',
-            fontWeight: 'bold',
-            fontSize: '1.2rem',
-            marginBottom: '2rem'
-          }}>
-            Team: {playerRole.team.charAt(0).toUpperCase() + playerRole.team.slice(1)}
-          </div>
-
-          <div style={{
-            marginTop: '2rem',
-            padding: '1rem',
-            backgroundColor: '#fff3cd',
-            borderRadius: '8px',
-            border: '1px solid #ffc107'
-          }}>
-            <p style={{ margin: 0, color: '#856404' }}>
-              <strong>Remember:</strong> Keep your role secret! The night phase will begin shortly.
-            </p>
-          </div>
-
-          <button
-            onClick={() => setShowRoleReveal(false)}
-            style={{
-              marginTop: '1.5rem',
-              padding: '0.75rem 2rem',
-              backgroundColor: '#3498db',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '1rem',
-              fontWeight: 'bold'
-            }}
-          >
-            Continue to Night Phase
-          </button>
-        </div>
-      </main>
-    )
-  }
-
-  // Show night phase UI
   const isWerewolfTurn = nightStatus?.current_role === 'Werewolf'
   const isWerewolfPlayer = playerRole.current_role === 'Werewolf'
+
+  const persistedOtherWerewolves = persistedWerewolfInfo?.other_werewolves || []
+  const persistedIsLoneWolf = persistedWerewolfInfo?.is_lone_wolf
 
   return (
     <main style={{
       padding: '2rem',
       fontFamily: 'Arial, sans-serif',
-      maxWidth: '600px',
+      maxWidth: '1100px',
       margin: '0 auto',
       minHeight: '100vh',
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
       backgroundColor: '#1a1a2e'
     }}>
+      <h1 style={{
+        color: '#ffffff',
+        marginBottom: '1.5rem',
+        fontSize: '2rem'
+      }}>
+        Your role: <span style={{ color: teamColor }}>{playerRole.initial_role}</span>
+      </h1>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1.2fr 1fr',
+        gap: '1.5rem',
+        marginBottom: '2rem'
+      }}>
+        <div style={{
+          backgroundColor: '#16213e',
+          padding: '1.5rem',
+          borderRadius: '12px',
+          border: `2px solid ${teamColor}`
+        }}>
+          <div style={{
+            fontSize: '1.2rem',
+            color: '#ffffff',
+            marginBottom: '0.75rem',
+            fontWeight: 'bold'
+          }}>
+            Your Instructions
+          </div>
+          <div style={{ color: '#a8b2d1', lineHeight: '1.6' }}>
+            {roleDescription}
+          </div>
+        </div>
+
+        <div style={{
+          backgroundColor: '#0f3460',
+          padding: '1.5rem',
+          borderRadius: '12px',
+          border: '2px solid #e94560'
+        }}>
+          <div style={{
+            fontSize: '1.2rem',
+            color: '#ffffff',
+            marginBottom: '0.75rem',
+            fontWeight: 'bold'
+          }}>
+            Your Information
+          </div>
+          {persistedIsLoneWolf && persistedCenterRole && (
+            <div style={{ color: '#a8ffef', marginBottom: '0.75rem' }}>
+              Lone Werewolf saw: {persistedCenterRole}
+            </div>
+          )}
+          {!persistedIsLoneWolf && persistedOtherWerewolves.length > 0 && (
+            <div style={{ color: '#a8b2d1' }}>
+              Other Werewolves: {persistedOtherWerewolves.map(w => w.player_name || w.player_id).join(', ')}
+            </div>
+          )}
+          {!persistedCenterRole && persistedOtherWerewolves.length === 0 && (
+            <div style={{ color: '#6c7a96' }}>No stored info yet.</div>
+          )}
+        </div>
+      </div>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '1.5rem',
+        marginBottom: '2rem'
+      }}>
+        <div style={{
+          backgroundColor: '#16213e',
+          padding: '1.5rem',
+          borderRadius: '12px',
+          border: '2px solid #0f3460'
+        }}>
+          <div style={{ color: '#ffffff', fontWeight: 'bold', marginBottom: '1rem' }}>
+            Players
+          </div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+            gap: '0.75rem'
+          }}>
+            {playersData.players.map(player => (
+              <button
+                key={player.player_id}
+                style={{
+                  backgroundColor: player.player_id === currentPlayerId ? '#27ae60' : '#0f3460',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '0.75rem',
+                  textAlign: 'left',
+                  cursor: 'default'
+                }}
+              >
+                {player.player_name}
+                {player.player_id === currentPlayerId && ' (You)'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{
+          backgroundColor: '#16213e',
+          padding: '1.5rem',
+          borderRadius: '12px',
+          border: '2px solid #0f3460'
+        }}>
+          <div style={{ color: '#ffffff', fontWeight: 'bold', marginBottom: '1rem' }}>
+            Center Cards
+          </div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '0.75rem'
+          }}>
+            {['Left', 'Center', 'Right'].map((label) => (
+              <div
+                key={label}
+                style={{
+                  backgroundColor: '#0f3460',
+                  borderRadius: '8px',
+                  padding: '1.5rem 0.5rem',
+                  color: '#a8b2d1',
+                  textAlign: 'center',
+                  border: '1px solid #1b4b7a'
+                }}
+              >
+                {label}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div style={{
         backgroundColor: '#16213e',
-        padding: '3rem',
+        padding: '2rem',
         borderRadius: '16px',
         boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
         textAlign: 'center',
@@ -410,7 +504,8 @@ export default function Game() {
           🌙 Night Phase
         </div>
 
-        {nightStatus?.current_role ? (
+        {nightStatus ? (
+          nightStatus.current_role ? (
           <>
             <div style={{
               fontSize: '2.5rem',
@@ -574,6 +669,9 @@ export default function Game() {
           }}>
             Night phase complete! Transitioning to day discussion...
           </div>
+        )
+        ) : (
+          <div style={{ color: '#a8b2d1' }}>Loading night phase...</div>
         )}
       </div>
     </main>
