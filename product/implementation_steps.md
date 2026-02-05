@@ -10,20 +10,25 @@
   - Backend: Game/PlayerRole/CenterCard models, role shuffling service, API endpoints
   - Frontend: Role reveal page, lobby redirects to game
   - Tests: 28/28 backend tests passing, 17/17 frontend tests passing
+- **Step 5**: Night Phase - Basic Infrastructure ✅
+  - Backend: Night service with wake order tracking (services/night_service.py)
+  - Backend: API endpoints for night status (GET /api/games/{game_id}/night-status, POST /api/games/{game_id}/night-status/complete)
+  - Frontend: Night phase UI with role display, loading spinner, progress tracking
+  - Frontend: 2-second polling for night status updates
+  - Tests: 6 new backend tests passing (test_night_phase.py)
 
-### 🚀 NEXT STEP: Step 5 - Night Phase - Basic Infrastructure
+### 🚀 NEXT STEP: Step 6 - Night Phase - Werewolf Role
 **What to implement:**
-- Backend: Night phase orchestration (wake order tracking, role completion)
-- Backend: Endpoints for night status and marking roles complete
-- Frontend: Night phase UI showing current role acting
-- Frontend: Polling for night status updates
+- Backend: Werewolf role logic (identify other werewolves, lone wolf center card viewing)
+- Backend: Endpoints for werewolf night actions
+- Frontend: Werewolf turn UI (show other werewolves or center card selection)
+- Frontend: Acknowledgment mechanism
 
 **Key files to work on:**
-- Backend: Create `services/night_service.py` for orchestration logic
-- Backend: Create `api/night.py` for night phase endpoints
-- Backend: Add tests in `tests/test_night_phase.py`
-- Frontend: Update `/game/[game_id]/page.tsx` to handle night phase
-- Frontend: Add tests in `__tests__/game.test.tsx`
+- Backend: Extend `services/night_service.py` or create `services/werewolf_service.py`
+- Backend: Add werewolf endpoints to `api/games.py`
+- Backend: Add tests in `tests/test_werewolf_role.py`
+- Frontend: Update `/game/[game_id]/page.tsx` to handle werewolf actions
 
 ---
 

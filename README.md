@@ -4,21 +4,21 @@ A digital implementation of the One Night Ultimate Werewolf card game.
 
 ---
 
-## 🎯 CURRENT STATUS: Step 3 Complete (15% Progress)
-
-**👉 NEXT SESSION: Start with [`START_HERE.md`](START_HERE.md)**
+## 🎯 CURRENT STATUS: Step 5 Complete (25% Progress)
 
 ### ✅ What's Working Now
 - ✓ Game creation (players, roles, timer configuration)
 - ✓ Players join via shareable URL
 - ✓ Real-time lobby with player list
-- ✓ "Start Game" validation
+- ✓ Role assignment and reveal
+- ✓ Night phase orchestration with wake order
+- ✓ Real-time night phase UI showing current role
 
-### 🔜 Next: Step 4 - Game Creation & Role Assignment
-Create Game/PlayerRole models, implement role shuffling, role reveal UI.
-**See:** `product/implementation_steps.md` - Step 4
+### 🔜 Next: Step 6 - Night Phase - Werewolf Role
+Implement werewolf role actions (seeing other werewolves, lone wolf center card viewing).
+**See:** `product/implementation_steps.md` - Step 6
 
-**Progress:** 3 of 20 steps complete | 13 tests passing
+**Progress:** 5 of 20 steps complete | 26+ backend tests passing
 
 ---
 
