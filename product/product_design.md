@@ -44,14 +44,15 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
     - Buttons are **enabled** only when the current player can take an action on that player (based on game state and current role step)
     - Buttons are **disabled** when no action is available for that player
     - Player cards shown next to avatars (face-down during discussion, face-up when revealed by actions)
-  - **Center Cards**: Three center cards are always displayed as clickable buttons
-    - Buttons are **enabled** only when the current player can take an action with that center card (based on game state and current role step)
-    - Buttons are **disabled** when no action is available for that center card
-    - Cards shown as face-down placeholders (only revealed when a role action allows viewing)
   - **Accrued Actions Display**: A persistent section listing all actions visible to the current player
     - Shows information learned during night phase (e.g., "You are a Werewolf. Your fellow werewolves are: [names]", "You viewed Alice's card. It is: SEER")
     - Actions persist and remain visible throughout the game (night phase through day phase)
     - Each action is displayed as a readable statement of what the player learned
+- **Action Overlay (Per-Player Turn)**: When it is a player’s action time, show a full-screen overlay that contains instructions plus action UI
+  - Overlay includes a list of player buttons and center card buttons as needed for the role action
+  - If no action is required (e.g., multiple Werewolves), the overlay presents the information learned and requires the player to click "OK"
+  - If an action is required, the overlay shows the result after the action is taken and requires "OK"
+  - After dismissal, the result is persisted in the Accrued Actions Display
   - **Phase Indicator**: Shows current game state (Night, Day Discussion, Day Voting)
   - **Current Role Step**: When in NIGHT state, shows which role is currently active (`current_role_step` field)
   - **Game & Score Display**:
@@ -60,19 +61,20 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
 - **State-Based Behavior**:
   - **NIGHT State**: 
     - Screen adapts based on `current_role_step` field
-    - When it's a player's role turn: relevant player/center card buttons become enabled
+    - Player buttons remain visible on the main screen
+    - Center cards are not shown on the main screen (reserved for action overlay and day voting)
+    - When it's a player's role turn: show the action overlay with instructions and role-specific buttons
     - When not their turn: all buttons disabled, shows "Waiting for [role] to complete action..."
-    - Role-specific instructions displayed when it's the player's turn
     - Host (automated) calls each role in sequence (via text/audio)
   - **DAY_DISCUSSION State**:
     - All player buttons enabled (for discussion reference, but no actions available)
-    - Center card buttons disabled (center cards not relevant during discussion)
+    - Center card buttons are shown and disabled (center cards not relevant during discussion)
     - Timer countdown showing remaining discussion time
     - Chat actively used for discussion
     - Host automatically transitions to DAY_VOTING when timer expires
   - **DAY_VOTING State**:
     - All player buttons enabled (for voting - click to vote)
-    - Center card buttons disabled
+    - Center card buttons shown but disabled
     - Vote confirmation dialog when clicking a player
     - Vote status display (who voted for whom, updated in real-time)
     - Chat disabled or restricted during voting

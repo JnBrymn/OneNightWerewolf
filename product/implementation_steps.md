@@ -42,11 +42,12 @@ This document breaks down the implementation into demonstrable milestones. Each 
 ## Unified Game Screen Architecture
 **Important**: The game uses a **single unified screen** that adapts based on game state (`state` and `current_role_step` fields). This screen:
 - Always displays all players as clickable buttons (enabled/disabled based on available actions)
-- Always displays center cards as clickable buttons (enabled/disabled based on available actions)
+- Does not show center cards on the main screen during night phase (center cards are shown in the action overlay and during day phases)
 - Always shows accrued actions visible to the current player (persistent throughout game)
 - Adapts behavior based on game state (NIGHT, DAY_DISCUSSION, DAY_VOTING)
 - Uses `GET /api/games/{game_id}/players/{player_id}/available-actions` to determine which buttons are enabled
 - Uses `GET /api/games/{game_id}/players/{player_id}/actions` to display accrued actions
+- Uses a full-screen **action overlay** during a player’s action time with instructions plus player and center card buttons
 
 ---
 
@@ -649,19 +650,23 @@ curl http://localhost:8000/api/games/{game_id}/night-status
 1. **Update Unified Game Screen for Werewolf Turn**
    - When `current_role_step` = "Werewolf" AND player is a werewolf:
      - **Multiple werewolves**: 
-       - Center card buttons disabled
-       - Player buttons disabled
-       - Show instructions: "You are a Werewolf. Your fellow werewolves are: [names]"
+       - Main screen shows player buttons only (disabled for actions)
+       - Action overlay appears immediately with instructions and information: "You are a Werewolf. Your fellow werewolves are: [names]"
        - Action automatically recorded and displayed in Accrued Actions section
-       - "Continue" button to acknowledge
+       - "OK" required to dismiss overlay
      - **Lone wolf**:
-       - Center card buttons enabled (can click to view)
-       - Player buttons disabled
-       - Show instructions: "You are the lone werewolf. Choose a center card to view"
-       - After clicking center card, action recorded and displayed in Accrued Actions: "You viewed center card [X]. The card is: [ROLE]"
+       - Main screen shows player buttons only (disabled for actions)
+       - Action overlay appears with instructions and center card buttons
+       - After clicking center card, overlay shows the revealed role
+       - "OK" required to dismiss overlay
+       - Action recorded and displayed in Accrued Actions: "You viewed center card [X]. The card is: [ROLE]"
    - When `current_role_step` = "Werewolf" but player is NOT a werewolf:
      - All buttons disabled
      - Show "Waiting for Werewolves to complete their turn..."
+2. **Action Overlay**
+   - Use a full-screen overlay for action-time instructions and results
+   - Overlay always includes required buttons for the action (players and/or center cards)
+   - Overlay always requires "OK" to dismiss after info/results are shown
 
 ### Demo
 **Backend:**
@@ -779,16 +784,18 @@ curl http://localhost:8000/api/games/{game_id}/night-status
 ### Frontend Tasks
 1. **Create Seer Turn UI**
    - When it's Seer turn AND player is Seer:
-     - Show two options: "View one player's card" or "View two center cards"
-     - If "View player": Show clickable player avatars (excluding self)
-       - After selection, show: "[Player Name]'s card is: [ROLE]" (persistently displayed)
-     - If "View center": Show two center card selectors
-       - After selection, show: "You viewed center cards [X] and [Y]. They are: [ROLE1] and [ROLE2]" (persistently displayed)
-     - "Continue" button after viewing
+     - Show a full-screen action overlay with Seer instructions
+     - Provide two options: "View one player's card" or "View two center cards"
+     - If "View player": Show clickable player buttons (excluding self)
+       - After selection, overlay shows: "[Player Name]'s card is: [ROLE]"
+     - If "View center": Show two center card buttons
+       - After selection, overlay shows: "You viewed center cards [X] and [Y]. They are: [ROLE1] and [ROLE2]"
+     - "OK" required to dismiss overlay
+     - Result persists in Accrued Actions after dismissal
 
 2. **Show game board with selectable elements**
-   - Player cards around board (clickable when Seer is choosing)
-   - Center cards (clickable when Seer is choosing)
+   - Player buttons always visible on main screen
+   - Center cards shown only in the action overlay during night (and on main screen during day phases)
 
 ### Demo
 **Backend:**
@@ -902,10 +909,11 @@ curl http://localhost:8000/api/games/{game_id}/night-status
 ### Frontend Tasks
 1. **Create Robber Turn UI**
    - When it's Robber turn AND player is Robber:
-     - Show: "Choose a player to rob (exchange cards with)"
-     - Display clickable player avatars (excluding self)
-     - After selection: Show "You robbed [player name] and took their card. You are now: [NEW ROLE]" (persistently displayed)
-     - "Continue" button
+     - Show a full-screen action overlay with Robber instructions
+     - Show clickable player buttons (excluding self)
+     - After selection: Overlay shows "You robbed [player name] and took their card. You are now: [NEW ROLE]"
+     - "OK" required to dismiss overlay
+     - Result persists in Accrued Actions after dismissal
 
 ### Demo
 **Backend:**
@@ -1002,17 +1010,21 @@ curl http://localhost:8000/api/games/{game_id}/players/{robber_id}/role \
 
 ### Frontend Tasks
 1. **Create Troublemaker Turn UI**
-   - Show: "Choose two players to exchange"
-   - Clickable player avatars (excluding self)
+   - Show a full-screen action overlay with Troublemaker instructions
+   - Clickable player buttons (excluding self)
    - Select two players
-   - Show: "You swapped [player1 name] and [player2 name]" (persistently displayed)
+   - Overlay shows: "You swapped [player1 name] and [player2 name]"
+   - "OK" required to dismiss overlay
+   - Result persists in Accrued Actions after dismissal
    - No role reveal (Troublemaker doesn't see what roles were exchanged)
 
 2. **Create Drunk Turn UI**
-   - Show: "Choose a center card to exchange with"
-   - Three center card selectors
+   - Show a full-screen action overlay with Drunk instructions
+   - Show center card buttons
    - Click one
-   - Show: "You exchanged your card with center card [X]. You don't know your new role." (persistently displayed)
+   - Overlay shows: "You exchanged your card with center card [X]. You don't know your new role."
+   - "OK" required to dismiss overlay
+   - Result persists in Accrued Actions after dismissal
 
 ### Demo
 **Backend:**
@@ -1082,9 +1094,10 @@ curl -X POST http://localhost:8000/api/games/{game_id}/players/{drunk_id}/drunk-
 
 ### Frontend Tasks
 1. **Create Insomniac Turn UI**
-   - Show: "You wake up and check your card"
-   - Display current role (may be different from initial): "Your current role is: [ROLE]" (persistently displayed)
-   - "Continue" button
+   - Show a full-screen action overlay with Insomniac instructions
+   - Overlay shows: "You wake up and check your card. Your current role is: [ROLE]"
+   - "OK" required to dismiss overlay
+   - Result persists in Accrued Actions after dismissal
 
 ### Demo
 **Backend:**
