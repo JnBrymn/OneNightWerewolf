@@ -1,6 +1,66 @@
 # One Night Werewolf - Implementation Steps
 
-## 🎯 CURRENT STATUS (Updated: 2026-02-02)
+## 🎯 CURRENT STATUS (Updated: 2026-02-05)
+
+### ✅ Simulated Role Actions Implemented
+
+**Feature Added:**
+To maintain secrecy about which roles are in play, the system now processes ALL action roles during the night phase, even if they're only in center cards (not assigned to players). Center card roles are automatically simulated with random delays (15-40 seconds) so players cannot deduce which roles are actually in play.
+
+**Implementation Details:**
+- `Game` model tracks simulated role timing (`simulated_role_started_at`, `simulated_role_duration_seconds`)
+- `night_service.py` uses `game.active_roles` (includes all action roles from players + center cards)
+- `check_and_advance_simulated_role()` automatically advances center card roles after their timer expires
+- Frontend polls every 1 second to catch simulated role completions quickly
+- All players see "Waiting for [Role] to complete their action..." for all active roles, maintaining secrecy
+
+### ✅ Step 5.5 Complete: Unified Game Screen Architecture Refactored
+
+**Completed:**
+The implementation has been successfully refactored to align with the unified game screen architecture and component structure specified in the product design. All key issues have been addressed:
+
+1. ✅ **Component Structure**: Monolithic component broken into modular components:
+   - `GameBoard.tsx` - Main container component
+   - `PlayerGrid.tsx` - Grid of player buttons
+   - `PlayerButton.tsx` - Individual player button
+   - `CenterCardButton.tsx` - Center card button (overlay only)
+   - `AccruedActionsDisplay.tsx` - Persistent actions section
+   - `PhaseIndicator.tsx` - Phase display
+   - `ActionOverlay.tsx` - Full-screen overlay container
+   - `RoleActionHandler.tsx` - Routes to role-specific components
+   - `WerewolfAction.tsx` - Werewolf-specific action logic
+   - `RoleReveal.tsx` - Role reveal with acknowledgment
+
+2. ✅ **Action Overlay**: Full-screen overlay system implemented. Overlay appears automatically when it's a player's turn, showing role-specific instructions and action buttons.
+
+3. ✅ **Center Cards**: Center cards only appear in action overlay (never on main screen).
+
+4. ✅ **API Integration**: Integrated with `available-actions` and `actions` endpoints:
+   - `GET /api/games/{game_id}/players/{player_id}/available-actions`
+   - `GET /api/games/{game_id}/players/{player_id}/actions`
+   - Backend: Action model and service created
+   - Backend: Tests written for new endpoints
+
+5. ✅ **State Management**: UI properly adapts based on `game.state` (NIGHT, DAY_DISCUSSION, DAY_VOTING).
+
+6. ✅ **Role Reveal**: Requires acknowledgment (no auto-dismiss).
+
+**Backend Changes:**
+- Created `Action` model (`backend/models/action.py`) for tracking night phase actions
+- Created `action_service.py` with `get_available_actions()` and `get_player_actions()` functions
+- Added API endpoints for available actions and accrued actions
+- Updated `werewolf_service.py` to create action records
+- **Simulated role actions**: Added logic to process all action roles (including center card roles) with random delays to maintain secrecy
+- Added tests (`test_action_service.py`)
+
+**Frontend Changes:**
+- Complete component refactoring with modular structure
+- Action overlay shows automatically when it's player's turn
+- Werewolf action properly integrated with overlay system
+- Fixed overlay display logic to show for all roles when it's their turn
+- Improved error handling and loading states
+
+---
 
 ### ✅ Completed Steps:
 - **Step 1**: Project Setup & Basic Infrastructure ✅
@@ -13,22 +73,34 @@
 - **Step 5**: Night Phase - Basic Infrastructure ✅
   - Backend: Night service with wake order tracking (services/night_service.py)
   - Backend: API endpoints for night status (GET /api/games/{game_id}/night-status, POST /api/games/{game_id}/night-status/complete)
+  - Backend: **Simulated role actions** - All action roles (including those in center cards) are processed to maintain secrecy. Center card roles auto-advance after 15-40 seconds.
   - Frontend: Night phase UI with role display, loading spinner, progress tracking
-  - Frontend: 2-second polling for night status updates
+  - Frontend: 1-second polling for night status updates (to catch simulated role completions)
   - Tests: 6 new backend tests passing (test_night_phase.py)
+- **Step 6**: Night Phase - Werewolf Role (Prototype) ✅
+  - Backend: Werewolf role logic (identify other werewolves, lone wolf center card viewing)
+  - Backend: Endpoints for werewolf night actions
+  - Backend: Tests added for werewolf role
+  - Frontend: Werewolf turn flow implemented (prototype - needs refactoring)
+- **Step 5.5**: Refactor to Unified Game Screen Architecture ✅
+  - Backend: Action model, action_service, API endpoints for available-actions and actions
+  - Backend: Tests for action service endpoints
+  - Frontend: Complete component refactoring (GameBoard, PlayerGrid, ActionOverlay, etc.)
+  - Frontend: Werewolf action integrated with overlay system
+  - Frontend: Proper state-based UI adaptation
 
-### 🚀 NEXT STEP: Step 6 - Night Phase - Werewolf Role
+### 🚀 NEXT STEP: Step 7 - Night Phase - Seer Role
 **What to implement:**
-- Backend: Werewolf role logic (identify other werewolves, lone wolf center card viewing)
-- Backend: Endpoints for werewolf night actions
-- Frontend: Werewolf turn UI (show other werewolves or center card selection)
-- Frontend: Acknowledgment mechanism
-
+- Backend: Seer role logic (view player or two center cards)
+- Backend: Endpoint for Seer action
+- Frontend: Seer action overlay (instructions + player/center buttons)
+- Persist Seer actions to "Your information"
 **Key files to work on:**
-- Backend: Extend `services/night_service.py` or create `services/werewolf_service.py`
-- Backend: Add werewolf endpoints to `api/games.py`
-- Backend: Add tests in `tests/test_werewolf_role.py`
-- Frontend: Update `/game/[game_id]/page.tsx` to handle werewolf actions
+- Backend: Add Seer endpoints to `api/games.py`
+- Backend: Add Seer logic to `services/seer_service.py` (new file)
+- Backend: Add tests in `tests/test_seer_role.py`
+- Frontend: Create `components/game/actions/roles/SeerAction.tsx`
+- Frontend: Update `RoleActionHandler.tsx` to route to SeerAction
 
 ---
 
@@ -42,7 +114,7 @@ This document breaks down the implementation into demonstrable milestones. Each 
 ## Unified Game Screen Architecture
 **Important**: The game uses a **single unified screen** that adapts based on game state (`state` and `current_role_step` fields). This screen:
 - Always displays all players as clickable buttons (enabled/disabled based on available actions)
-- Does not show center cards on the main screen during night phase (center cards are shown in the action overlay and during day phases)
+- Does not show center cards on the main screen (center cards are only shown in the action overlay when needed for night phase actions)
 - Always shows accrued actions visible to the current player (persistent throughout game)
 - Adapts behavior based on game state (NIGHT, DAY_DISCUSSION, DAY_VOTING)
 - Uses `GET /api/games/{game_id}/players/{player_id}/available-actions` to determine which buttons are enabled
@@ -507,12 +579,17 @@ curl http://localhost:8000/api/games/{game_id}/players/{player2_id}/role \
    ```
 
 2. **Implement night phase orchestration**
-   - Night wake order manager (query roles table ordered by wake_order, filter has_action=true)
+   - Night wake order manager (uses `game.active_roles` which includes ALL action roles from players + center cards)
    - Track current role in sequence
    - Track completed roles
-   - Auto-advance to next role when current completes
+   - **Simulated role actions**: For action roles in center cards (not assigned to players):
+     - Automatically process them with random delay (15-40 seconds)
+     - Players see "Waiting for [Role] to complete their action..."
+     - Auto-advance after timer expires
+     - Maintains secrecy - players can't tell which roles are real vs simulated
+   - Auto-advance to next role when current completes (or timer expires for simulated roles)
    - Transition to DAY_DISCUSSION when all roles complete
-   - Note: Wake order comes from roles table (wake_order field), not hardcoded list
+   - Note: Uses `game.active_roles` (set during game creation) which includes all action roles from both players and center cards
 
 3. **Implement endpoints**
    - `GET /api/games/{game_id}/night-status` - Get current night phase status
@@ -521,24 +598,41 @@ curl http://localhost:8000/api/games/{game_id}/players/{player2_id}/role \
    - `GET /api/games/{game_id}/players/{player_id}/actions` - Get all accrued actions visible to player (for persistent display)
 
 ### Frontend Tasks
-1. **Create Unified Game Screen** (`/game/[game_id]` - single screen for all phases)
+1. **Create Component Structure** (set up component files)
+   - Create `components/game/` directory structure:
+     - `GameBoard.tsx` - Main container component
+     - `PlayerGrid.tsx` - Grid of player buttons
+     - `PlayerButton.tsx` - Individual player button (receives click handler as prop)
+     - `AccruedActionsDisplay.tsx` - Persistent actions section
+     - `PhaseIndicator.tsx` - Phase indicator
+     - `ActionOverlay.tsx` - Full-screen overlay container
+     - `RoleActionHandler.tsx` - Routes to role-specific actions
+     - `actions/roles/` - Directory for role-specific action components
+     - `CenterCardButton.tsx` - Center card button (only used in overlay)
+
+2. **Create Unified Game Screen** (`/game/[game_id]` - single screen for all phases)
+   - **GameBoard Component**:
+     - Manages game state polling and updates
+     - Coordinates between overlay and main screen
+     - Handles phase transitions
    - **Always Visible Elements**:
-     - Display all players as clickable buttons/avatars arranged around board
-     - Display three center cards as clickable buttons
-     - **Accrued Actions Section**: Persistent area showing all actions visible to the current player
+     - **PlayerGrid**: Display all players as clickable buttons/avatars arranged around board
+       - Uses `PlayerButton` components
+       - Receives click handler function as prop (handler varies by role/action type)
+     - **AccruedActionsDisplay**: Persistent area showing all actions visible to the current player
        - Fetch from `GET /api/games/{game_id}/players/{player_id}/actions`
        - Display each action as readable text (e.g., "You are a Werewolf. Your fellow werewolves are: [names]")
        - Actions persist throughout game (night through day)
    - **State-Based Adaptation** (when state = NIGHT):
-     - Show "Night Phase" header
+     - Show "Night Phase" header via `PhaseIndicator`
      - Display current role being called (`current_role_step` from game state)
      - Fetch available actions: `GET /api/games/{game_id}/players/{player_id}/available-actions`
-     - Enable/disable player and center card buttons based on response
-     - When it's player's turn: Show role-specific instructions, enable relevant buttons
+     - Enable/disable player buttons based on response
+     - When it's player's turn: Show `ActionOverlay` with role-specific action component
      - When not player's turn: Show "Waiting for {role} to complete action...", disable all buttons
    - **Phase Indicator**: Show current game state (Night, Day Discussion, Day Voting)
 
-2. **Add polling for game state**
+3. **Add polling for game state**
    - Poll `/api/games/{game_id}` every 2 seconds to get current state and `current_role_step`
    - Poll `/api/games/{game_id}/players/{player_id}/available-actions` to update button states
    - Poll `/api/games/{game_id}/players/{player_id}/actions` to update accrued actions display
@@ -570,7 +664,140 @@ curl http://localhost:8000/api/games/{game_id}/night-status
 
 ---
 
-## Step 6: Night Phase - Werewolf Role (Information Display)
+## Step 5.5: Refactor to Unified Game Screen Architecture
+
+**Purpose**: Refactor the current monolithic implementation to align with the unified game screen architecture and component structure specified in the product design. This sets the foundation for implementing all remaining roles.
+
+### Backend Tasks
+1. **Implement Missing API Endpoints** (if not already implemented)
+   - `GET /api/games/{game_id}/players/{player_id}/available-actions` - Returns which players/center cards are actionable
+     - Response: `{ "actionable_players": [...], "actionable_center_cards": [...], "instructions": "..." }`
+   - `GET /api/games/{game_id}/players/{player_id}/actions` - Returns all accrued actions visible to player
+     - Response: `{ "actions": [{ "action_type": "...", "description": "..." }, ...] }`
+
+2. **Write Tests First** (`tests/test_available_actions.py`, `tests/test_accrued_actions.py`)
+   ```python
+   def test_available_actions_for_werewolf():
+       # Test that werewolf gets correct actionable items
+       response = client.get(f"/api/games/{game_id}/players/{werewolf_id}/available-actions")
+       assert response.status_code == 200
+       # Verify response structure
+   
+   def test_accrued_actions_persist():
+       # Test that actions are returned correctly
+       response = client.get(f"/api/games/{game_id}/players/{player_id}/actions")
+       assert response.status_code == 200
+       assert "actions" in response.json()
+   ```
+
+### Frontend Tasks
+1. **Create Component Directory Structure**
+   ```
+   frontend/components/game/
+   ├── GameBoard.tsx
+   ├── PlayerGrid.tsx
+   ├── PlayerButton.tsx
+   ├── AccruedActionsDisplay.tsx
+   ├── PhaseIndicator.tsx
+   ├── ActionOverlay.tsx
+   ├── RoleActionHandler.tsx
+   ├── CenterCardButton.tsx
+   └── actions/
+       └── roles/
+           ├── WerewolfAction.tsx
+           ├── SeerAction.tsx (placeholder for Step 7)
+           ├── RobberAction.tsx (placeholder for Step 8)
+           └── ...
+   ```
+
+2. **Create Core Components**
+   - **`GameBoard.tsx`**: Main container
+     - Manages game state polling (`/api/games/{game_id}`)
+     - Manages available actions polling (`/api/games/{game_id}/players/{player_id}/available-actions`)
+     - Manages accrued actions polling (`/api/games/{game_id}/players/{player_id}/actions`)
+     - Coordinates overlay visibility
+     - Handles state-based UI adaptation (NIGHT, DAY_DISCUSSION, DAY_VOTING)
+   
+   - **`PlayerGrid.tsx`**: Grid of player buttons
+     - Receives players array and click handler as props
+     - Renders `PlayerButton` components
+     - Handles enabled/disabled states from available-actions API
+   
+   - **`PlayerButton.tsx`**: Individual player button
+     - Receives click handler as prop (varies by role/action type)
+     - Shows player avatar, name, role card (face-up/face-down)
+     - Handles enabled/disabled state
+     - Highlights when selected (for multi-select)
+   
+   - **`AccruedActionsDisplay.tsx`**: Persistent actions section
+     - Fetches from `/api/games/{game_id}/players/{player_id}/actions`
+     - Displays each action as readable text
+     - Persists throughout game (night through day)
+   
+   - **`PhaseIndicator.tsx`**: Phase display
+     - Shows current game state (Night, Day Discussion, Day Voting)
+     - Shows current role step during night phase
+   
+   - **`ActionOverlay.tsx`**: Full-screen overlay container
+     - Full-screen overlay that covers main board
+     - Contains role-specific action UI via `RoleActionHandler`
+     - Always requires "OK" button to dismiss
+     - Manages overlay visibility state
+   
+   - **`RoleActionHandler.tsx`**: Routes to role-specific components
+     - Receives current role and game state
+     - Routes to appropriate role action component
+     - Handles role detection logic
+   
+   - **`CenterCardButton.tsx`**: Center card button
+     - Only used in action overlay (never on main screen)
+     - Receives click handler as prop
+     - Shows card index (0, 1, 2) or label (Left, Center, Right)
+     - Handles enabled/disabled state
+
+3. **Refactor Werewolf Action**
+   - **`WerewolfAction.tsx`**: Extract werewolf logic from main component
+     - Handles multiple werewolves: Shows info, requires "OK"
+     - Handles lone wolf: Shows `CenterCardButton` components, handles selection
+     - Uses `CenterCardButton` component for center card selection
+     - Properly dismisses overlay and persists to Accrued Actions
+
+4. **Update Main Game Page** (`/game/[game_id]/page.tsx`)
+   - Replace monolithic component with `GameBoard` component
+   - Remove inline werewolf logic (now in `WerewolfAction`)
+   - Remove center cards from main screen (only in overlay)
+   - Remove local state for persisted actions (use API instead)
+   - Integrate with new component structure
+
+5. **Fix Role Reveal**
+   - Create `RoleReveal.tsx` component
+   - Show role card with "I understand" button
+   - Card flips face-down after acknowledgment
+   - No auto-dismiss
+
+### Demo
+**Backend:**
+```bash
+# Get available actions
+curl http://localhost:8000/api/games/{game_id}/players/{player_id}/available-actions
+# Expected: {"actionable_players": [...], "actionable_center_cards": [...], "instructions": "..."}
+
+# Get accrued actions
+curl http://localhost:8000/api/games/{game_id}/players/{player_id}/actions
+# Expected: {"actions": [{"action_type": "VIEW_CARD", "description": "You are a Werewolf. Your fellow werewolves are: [names]"}]}
+```
+
+**Frontend:**
+- See modular component structure in place
+- Werewolf action appears in full-screen overlay (not inline)
+- Center cards only appear in overlay (not on main screen)
+- Accrued actions fetched from API and displayed persistently
+- Player buttons enabled/disabled based on available-actions API
+- Role reveal requires acknowledgment (no auto-dismiss)
+
+---
+
+## Step 6: Night Phase - Werewolf Role (Refactored)
 
 ### Backend Tasks
 1. **Write Tests First** (`tests/test_werewolf_role.py`)
@@ -647,26 +874,37 @@ curl http://localhost:8000/api/games/{game_id}/night-status
    - `POST /api/games/{game_id}/players/{player_id}/acknowledge` - Acknowledge seeing info
 
 ### Frontend Tasks
-1. **Update Unified Game Screen for Werewolf Turn**
+1. **Complete WerewolfAction Component** (created in Step 5.5, now verify it works correctly)
+   - Verify both multiple werewolves and lone wolf scenarios work
+   - **Multiple werewolves**: 
+     - Shows information: "You are a Werewolf. Your fellow werewolves are: [names]"
+     - Requires "OK" button to dismiss
+     - Action automatically recorded and displayed in Accrued Actions section
+   - **Lone wolf**:
+     - Shows instructions and `CenterCardButton` components (3 buttons for center cards)
+     - Handles center card selection: `handleViewCenter(cardIndex: number)`
+     - After clicking center card, shows the revealed role
+     - "OK" required to dismiss overlay
+     - Action recorded and displayed in Accrued Actions: "You viewed center card [X]. The card is: [ROLE]"
+
+2. **Verify ActionOverlay and RoleActionHandler Integration**
+   - Confirm `ActionOverlay` renders full-screen overlay correctly
+   - Confirm `RoleActionHandler` routes to `WerewolfAction` when role is "Werewolf"
+   - Verify overlay dismissal works properly
+
+3. **Verify GameBoard Integration**
    - When `current_role_step` = "Werewolf" AND player is a werewolf:
-     - **Multiple werewolves**: 
-       - Main screen shows player buttons only (disabled for actions)
-       - Action overlay appears immediately with instructions and information: "You are a Werewolf. Your fellow werewolves are: [names]"
-       - Action automatically recorded and displayed in Accrued Actions section
-       - "OK" required to dismiss overlay
-     - **Lone wolf**:
-       - Main screen shows player buttons only (disabled for actions)
-       - Action overlay appears with instructions and center card buttons
-       - After clicking center card, overlay shows the revealed role
-       - "OK" required to dismiss overlay
-       - Action recorded and displayed in Accrued Actions: "You viewed center card [X]. The card is: [ROLE]"
+     - Main screen shows player buttons only (disabled for actions)
+     - Action overlay appears immediately via `ActionOverlay` → `RoleActionHandler` → `WerewolfAction`
    - When `current_role_step` = "Werewolf" but player is NOT a werewolf:
      - All buttons disabled
      - Show "Waiting for Werewolves to complete their turn..."
-2. **Action Overlay**
-   - Use a full-screen overlay for action-time instructions and results
-   - Overlay always includes required buttons for the action (players and/or center cards)
-   - Overlay always requires "OK" to dismiss after info/results are shown
+
+4. **Add Frontend Tests** (`__tests__/WerewolfAction.test.tsx`)
+   - Test multiple werewolves scenario
+   - Test lone wolf scenario
+   - Test overlay dismissal
+   - Test action persistence in Accrued Actions
 
 ### Demo
 **Backend:**
@@ -694,11 +932,14 @@ curl http://localhost:8000/api/games/{game_id}/night-status
 ```
 
 **Frontend:**
-- Werewolf player sees: "You are a Werewolf. Your fellow werewolves are: [Bob, Charlie]" (this information persists on their screen)
-- Click "Continue"
+- Werewolf player sees full-screen action overlay: "You are a Werewolf. Your fellow werewolves are: [Bob, Charlie]"
+- Click "OK" to dismiss overlay
+- Information persists in Accrued Actions Display section
 - See "Waiting for Minion to complete their turn..."
-- Lone wolf: Selects center card 1, sees "You viewed center card 1. The card is: VILLAGER" (this information persists)
-- Non-werewolf players see: "Waiting for Werewolves..."
+- Lone wolf: Full-screen overlay shows center card buttons
+- Selects center card 1, sees "You viewed center card 1. The card is: VILLAGER"
+- Click "OK" to dismiss, information persists in Accrued Actions Display
+- Non-werewolf players see: "Waiting for Werewolves..." (no overlay)
 
 ---
 
@@ -782,20 +1023,29 @@ curl http://localhost:8000/api/games/{game_id}/night-status
    - `POST /api/games/{game_id}/players/{player_id}/seer-action` - Perform Seer action
 
 ### Frontend Tasks
-1. **Create Seer Turn UI**
-   - When it's Seer turn AND player is Seer:
-     - Show a full-screen action overlay with Seer instructions
-     - Provide two options: "View one player's card" or "View two center cards"
-     - If "View player": Show clickable player buttons (excluding self)
-       - After selection, overlay shows: "[Player Name]'s card is: [ROLE]"
-     - If "View center": Show two center card buttons
-       - After selection, overlay shows: "You viewed center cards [X] and [Y]. They are: [ROLE1] and [ROLE2]"
-     - "OK" required to dismiss overlay
-     - Result persists in Accrued Actions after dismissal
+1. **Create SeerAction Component** (`components/game/actions/roles/SeerAction.tsx`)
+   - Handles choice-based action: view player OR view two center cards
+   - **Step 1: Action Type Selection**
+     - Shows two buttons: "View one player's card" or "View two center cards"
+     - Tracks selected action type in component state
+   - **Step 2a: View Player Path**
+     - Renders `PlayerButton` components (excluding self)
+     - Click handler: `handleViewPlayer(playerId: string)`
+     - After selection, shows result: "[Player Name]'s card is: [ROLE]"
+   - **Step 2b: View Center Path**
+     - Renders `CenterCardButton` components (multi-select, requires 2 selections)
+     - Click handler: `handleViewCenter(cardIndex: number)` - tracks selected indices
+     - After two selections, shows result: "You viewed center cards [X] and [Y]. They are: [ROLE1] and [ROLE2]"
+   - "OK" required to dismiss overlay
+   - Result persists in Accrued Actions after dismissal
 
-2. **Show game board with selectable elements**
-   - Player buttons always visible on main screen
-   - Center cards shown only in the action overlay during night (and on main screen during day phases)
+2. **Update RoleActionHandler**
+   - Routes to `SeerAction` when role is "Seer"
+
+3. **Update PlayerButton for Multi-Select**
+   - Support multi-select mode (for Seer viewing two center cards)
+   - Track selected state when in multi-select mode
+   - Disable after selection if max selections reached
 
 ### Demo
 **Backend:**
@@ -907,13 +1157,18 @@ curl http://localhost:8000/api/games/{game_id}/night-status
    - `POST /api/games/{game_id}/players/{player_id}/robber-action` - Exchange and view
 
 ### Frontend Tasks
-1. **Create Robber Turn UI**
-   - When it's Robber turn AND player is Robber:
-     - Show a full-screen action overlay with Robber instructions
-     - Show clickable player buttons (excluding self)
-     - After selection: Overlay shows "You robbed [player name] and took their card. You are now: [NEW ROLE]"
+1. **Create RobberAction Component** (`components/game/actions/roles/RobberAction.tsx`)
+   - Handles multi-step action: swap + view
+   - **Step 1: Player Selection**
+     - Shows `PlayerButton` components (excluding self)
+     - Click handler: `handleRobPlayer(playerId: string)` - calls API to swap and view
+   - **Step 2: Result Display**
+     - After API response, shows result: "You robbed [player name] and took their card. You are now: [NEW ROLE]"
      - "OK" required to dismiss overlay
-     - Result persists in Accrued Actions after dismissal
+   - Result persists in Accrued Actions after dismissal
+
+2. **Update RoleActionHandler**
+   - Routes to `RobberAction` when role is "Robber"
 
 ### Demo
 **Backend:**
@@ -1009,22 +1264,29 @@ curl http://localhost:8000/api/games/{game_id}/players/{robber_id}/role \
    - `POST /api/games/{game_id}/players/{player_id}/drunk-action`
 
 ### Frontend Tasks
-1. **Create Troublemaker Turn UI**
-   - Show a full-screen action overlay with Troublemaker instructions
-   - Clickable player buttons (excluding self)
-   - Select two players
-   - Overlay shows: "You swapped [player1 name] and [player2 name]"
+1. **Create TroublemakerAction Component** (`components/game/actions/roles/TroublemakerAction.tsx`)
+   - Handles multi-select action: select two players
+   - Shows `PlayerButton` components (excluding self)
+   - Click handler: `handleSelectPlayer(playerId: string)` - tracks selection state
+   - **Selection State Management**:
+     - First click: stores first player ID, highlights button
+     - Second click: stores second player ID, calls API to swap
+   - After both selected, shows result: "You swapped [player1 name] and [player2 name]"
    - "OK" required to dismiss overlay
    - Result persists in Accrued Actions after dismissal
    - No role reveal (Troublemaker doesn't see what roles were exchanged)
 
-2. **Create Drunk Turn UI**
-   - Show a full-screen action overlay with Drunk instructions
-   - Show center card buttons
-   - Click one
-   - Overlay shows: "You exchanged your card with center card [X]. You don't know your new role."
+2. **Create DrunkAction Component** (`components/game/actions/roles/DrunkAction.tsx`)
+   - Handles single-select action: swap with center card
+   - Shows `CenterCardButton` components
+   - Click handler: `handleSelectCenter(cardIndex: number)` - calls API to swap
+   - After selection, shows result: "You exchanged your card with center card [X]. You don't know your new role."
    - "OK" required to dismiss overlay
    - Result persists in Accrued Actions after dismissal
+
+3. **Update RoleActionHandler**
+   - Routes to `TroublemakerAction` when role is "Troublemaker"
+   - Routes to `DrunkAction` when role is "Drunk"
 
 ### Demo
 **Backend:**
@@ -1093,11 +1355,15 @@ curl -X POST http://localhost:8000/api/games/{game_id}/players/{drunk_id}/drunk-
    - `GET /api/games/{game_id}/players/{player_id}/insomniac-view` - View current role
 
 ### Frontend Tasks
-1. **Create Insomniac Turn UI**
-   - Show a full-screen action overlay with Insomniac instructions
-   - Overlay shows: "You wake up and check your card. Your current role is: [ROLE]"
+1. **Create InsomniacAction Component** (`components/game/actions/roles/InsomniacAction.tsx`)
+   - Handles information display action (no button interactions)
+   - Fetches current role from API: `GET /api/games/{game_id}/players/{player_id}/insomniac-view`
+   - Shows: "You wake up and check your card. Your current role is: [ROLE]"
    - "OK" required to dismiss overlay
    - Result persists in Accrued Actions after dismissal
+
+2. **Update RoleActionHandler**
+   - Routes to `InsomniacAction` when role is "Insomniac"
 
 ### Demo
 **Backend:**
@@ -1182,7 +1448,7 @@ curl http://localhost:8000/api/games/{game_id}
    - Show "Day Phase - Discussion" header
    - Display countdown timer (MM:SS format)
    - **Player buttons**: All visible but disabled (no actions available, for reference only)
-   - **Center card buttons**: Disabled (not relevant during discussion)
+   - **Center cards**: Not shown on main screen (only shown in action overlay during night phase)
    - **Accrued Actions Section**: Still visible (showing night phase actions)
    - Chat box for discussion (prominent)
    - All cards face-down (no roles visible)
@@ -1291,7 +1557,7 @@ curl http://localhost:8000/api/games/{game_id}
    - Screen automatically adapts when game state changes to DAY_VOTING
    - Show "Day Phase - Voting" header
    - **Player buttons**: All enabled (click to vote)
-   - **Center card buttons**: Disabled (not relevant during voting)
+   - **Center cards**: Not shown on main screen (only shown in action overlay during night phase)
    - **Accrued Actions Section**: Still visible (showing night phase actions)
    - Click player button to vote
    - Confirmation dialog: "Vote to kill [player]?"

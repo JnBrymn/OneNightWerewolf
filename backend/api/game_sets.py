@@ -76,9 +76,23 @@ def list_players(game_set_id: str, db: Session = Depends(get_db)):
     }
 
 
+@router.get("/{game_set_id}/active-game")
+def get_active_game_endpoint(game_set_id: str, db: Session = Depends(get_db)):
+    """Get the current active game for a game set, if one exists."""
+    game_set = db.query(GameSet).filter(GameSet.game_set_id == game_set_id).first()
+    if not game_set:
+        raise HTTPException(status_code=404, detail="Game set not found")
+    
+    active_game = game_service.get_active_game(db, game_set_id)
+    if not active_game:
+        raise HTTPException(status_code=404, detail="No active game found")
+    
+    return active_game.to_dict()
+
+
 @router.post("/{game_set_id}/start", status_code=201)
 def start_game_endpoint(game_set_id: str, db: Session = Depends(get_db)):
-    """Start the first game in a game set."""
+    """Start a new game in a game set. Returns existing active game if one already exists."""
     try:
         game = game_service.start_game(db, game_set_id)
         return game.to_dict()

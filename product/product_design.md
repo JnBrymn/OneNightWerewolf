@@ -62,19 +62,19 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
   - **NIGHT State**: 
     - Screen adapts based on `current_role_step` field
     - Player buttons remain visible on the main screen
-    - Center cards are not shown on the main screen (reserved for action overlay and day voting)
+    - Center cards are not shown on the main screen (only shown in the action overlay when needed for night phase actions)
     - When it's a player's role turn: show the action overlay with instructions and role-specific buttons
     - When not their turn: all buttons disabled, shows "Waiting for [role] to complete action..."
     - Host (automated) calls each role in sequence (via text/audio)
   - **DAY_DISCUSSION State**:
     - All player buttons enabled (for discussion reference, but no actions available)
-    - Center card buttons are shown and disabled (center cards not relevant during discussion)
+    - Center cards not shown on main screen (only shown in action overlay during night phase)
     - Timer countdown showing remaining discussion time
     - Chat actively used for discussion
     - Host automatically transitions to DAY_VOTING when timer expires
   - **DAY_VOTING State**:
     - All player buttons enabled (for voting - click to vote)
-    - Center card buttons shown but disabled
+    - Center cards not shown on main screen (only shown in action overlay during night phase)
     - Vote confirmation dialog when clicking a player
     - Vote status display (who voted for whom, updated in real-time)
     - Chat disabled or restricted during voting
@@ -113,20 +113,168 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
   - **Play Another Game Button**: Start another game in the same Game Set (creates new game, shuffles cards, assigns new roles, goes to NIGHT state)
   - **End Game Set Button**: End game set and return to lobby
 
-### 5. **Shared Components**
-- **Player Avatar**: Visual representation of player (image/logo/photo)
-- **Card Component**: Reusable card UI for roles (face-up/face-down states)
-- **Game Board Layout**: Arranges players and center cards visually
-- **Drag and Drop**: For card exchange actions (optional, can use click/select)
-- **Modal/Dialog**: For actions and confirmations
-- **Chat Component**: 
-  - **Always Available**: Persistent chat interface visible on all screens and phases
-  - Text chat (MVP) - available in all game states (Night, Day Discussion, Day Voting, Results)
+### 5. **Frontend Component Architecture**
+
+The unified game screen is built from modular components that handle different aspects of gameplay. Components are organized to support role-specific interactions and action types.
+
+#### **Core Layout Components**
+- **`GameBoard`** (`components/game/GameBoard.tsx`): Main container component that orchestrates the entire game screen
+  - Manages game state polling and updates
+  - Coordinates between overlay and main screen
+  - Handles phase transitions
+  - Renders appropriate components based on game state
+
+- **`PlayerGrid`** (`components/game/PlayerGrid.tsx`): Displays all players as clickable buttons arranged around the board
+  - Always visible on main screen
+  - Receives click handler function as prop (handler varies by role/action type)
+  - Handles enabled/disabled states based on available actions
+  - Shows player avatars and names
+  - Highlights current player
+
+- **`AccruedActionsDisplay`** (`components/game/AccruedActionsDisplay.tsx`): Persistent section showing all actions visible to current player
+  - Fetches from `GET /api/games/{game_id}/players/{player_id}/actions`
+  - Displays each action as readable text
+  - Persists throughout game (night through day)
+  - Updates when new actions are recorded
+
+- **`PhaseIndicator`** (`components/game/PhaseIndicator.tsx`): Shows current game phase
+  - Displays: "Night Phase", "Day Discussion", "Day Voting", "Results"
+  - Shows current role step during night phase
+  - Visual indicator with phase-specific styling
+
+#### **Action Overlay System**
+- **`ActionOverlay`** (`components/game/actions/ActionOverlay.tsx`): Full-screen overlay container for night phase actions
+  - Full-screen overlay that covers main game board
+  - Contains role-specific action UI
+  - Always requires "OK" button to dismiss
+  - Manages overlay visibility state
+
+- **`RoleActionHandler`** (`components/game/actions/RoleActionHandler.tsx`): Determines which role-specific action component to render
+  - Receives current role and game state
+  - Routes to appropriate role action component
+  - Handles role detection logic
+
+#### **Role-Specific Action Components** (in `components/game/actions/roles/`)
+Each role has its own action component that handles role-specific interactions:
+
+- **`WerewolfAction.tsx`**: Handles Werewolf turn
+  - **Multiple werewolves**: Shows other werewolves list, requires acknowledgment
+  - **Lone wolf**: Shows center card buttons, handles center card selection and viewing
+  - Uses `PlayerButton` and `CenterCardButton` components within overlay
+
+- **`SeerAction.tsx`**: Handles Seer turn (choice-based action)
+  - Shows action type selection: "View one player" OR "View two center cards"
+  - **If view player**: Renders `PlayerButton` components (excluding self)
+  - **If view center**: Renders two `CenterCardButton` components (multi-select)
+  - Displays results after selection
+
+- **`RobberAction.tsx`**: Handles Robber turn (multi-step: swap + view)
+  - Step 1: Shows `PlayerButton` components (excluding self) for selection
+  - Step 2: After selection, shows result: "You robbed [player] and took their card. You are now: [NEW ROLE]"
+  - Manages multi-step state
+
+- **`TroublemakerAction.tsx`**: Handles Troublemaker turn (multi-select)
+  - Shows `PlayerButton` components (excluding self)
+  - Requires selecting TWO players
+  - Tracks selection state (first player, second player)
+  - Shows result after both selected: "You swapped [player1] and [player2]"
+
+- **`DrunkAction.tsx`**: Handles Drunk turn
+  - Shows `CenterCardButton` components
+  - Single selection
+  - Shows result: "You exchanged your card with center card [X]. You don't know your new role."
+
+- **`InsomniacAction.tsx`**: Handles Insomniac turn (information display)
+  - Shows current role after all night actions
+  - Requires acknowledgment only
+  - No button interactions needed
+
+- **`MinionAction.tsx`**: Handles Minion turn (information display)
+  - Shows werewolves list
+  - Requires acknowledgment only
+  - Similar to multiple werewolves flow
+
+- **`MasonAction.tsx`**: Handles Mason turn (information display)
+  - Shows other Mason (or indicates Mason is in center)
+  - Requires acknowledgment only
+
+#### **Interactive Button Components**
+- **`PlayerButton`** (`components/game/PlayerButton.tsx`): Individual clickable player button
+  - Receives click handler function as prop (handler varies by role)
+  - Handles different action types:
+    - **VIEW**: Click to view player's card (Seer)
+    - **SWAP**: Click to swap with player (Robber)
+    - **SELECT**: Click to select for multi-select actions (Troublemaker)
+    - **VOTE**: Click to vote (Day Voting phase)
+  - Shows enabled/disabled state
+  - Displays player avatar, name, and role card (face-up/face-down)
+  - Highlights when selected (for multi-select actions)
+
+- **`CenterCardButton`** (`components/game/CenterCardButton.tsx`): Individual center card button
+  - **Only shown in action overlay** (never on main screen)
+  - Receives click handler function as prop
+  - Handles different action types:
+    - **VIEW**: Click to view center card (Lone Wolf, Seer viewing center)
+    - **SWAP**: Click to swap with center card (Drunk)
+  - Shows enabled/disabled state
+  - Displays card index (0, 1, 2) or label (Left, Center, Right)
+  - Highlights when selected
+
+#### **Supporting Components**
+- **`ChatComponent`** (`components/game/ChatComponent.tsx`): Persistent chat interface
+  - Always visible on all screens and phases
+  - Text chat (MVP)
   - Chat history persists throughout game session
-  - Future: Audio/RTC support for voice communication
-  - Far Future: built-in video of players
-- **Toast Notifications**: For game events and errors
-- **Loading States**: For async operations
+  - Future: Audio/RTC support
+
+- **`TimerDisplay`** (`components/game/TimerDisplay.tsx`): Countdown timer for discussion phase
+  - Shows MM:SS format
+  - Updates in real-time
+  - Only visible during DAY_DISCUSSION phase
+
+- **`VoteStatus`** (`components/game/VoteStatus.tsx`): Voting progress display
+  - Shows "X/Y players have voted"
+  - Shows who voted for whom (optional, may be hidden until all votes cast)
+  - Only visible during DAY_VOTING phase
+
+- **`ResultsDisplay`** (`components/game/ResultsDisplay.tsx`): Results screen
+  - Shows vote counts, deaths, final roles
+  - Shows team assignments and winners
+  - "Play Another Game" and "End Game Set" buttons
+
+- **`RoleReveal`** (`components/game/RoleReveal.tsx`): Initial role reveal screen
+  - Shows role card with name and description
+  - "I understand" acknowledgment button
+  - Card flips face-down after acknowledgment
+
+- **`LoadingSpinner`** (`components/shared/LoadingSpinner.tsx`): Loading state indicator
+- **`ErrorDisplay`** (`components/shared/ErrorDisplay.tsx`): Error message display
+- **`Toast`** (`components/shared/Toast.tsx`): Toast notifications for game events
+
+#### **Component Interaction Patterns**
+
+**Click Handler Strategy:**
+- `PlayerButton` and `CenterCardButton` receive click handlers as props
+- Click handlers are created by role-specific action components
+- Handler function signature: `(targetId: string) => void` or `(cardIndex: number) => void`
+- Different roles pass different handlers:
+  - Seer viewing player: `(playerId) => viewPlayerCard(playerId)`
+  - Robber: `(playerId) => swapWithPlayer(playerId)`
+  - Troublemaker: `(playerId) => selectPlayerForSwap(playerId)` (tracks selection state)
+  - Voting: `(playerId) => voteForPlayer(playerId)`
+
+**Action Flow Pattern:**
+1. Game state changes → `GameBoard` detects role turn
+2. `GameBoard` renders `ActionOverlay` with `RoleActionHandler`
+3. `RoleActionHandler` routes to appropriate role action component
+4. Role action component renders `PlayerButton`/`CenterCardButton` with role-specific handlers
+5. User clicks button → handler executes → API call → result displayed
+6. User clicks "OK" → overlay dismisses → action persists in `AccruedActionsDisplay`
+
+**State Management:**
+- Game state (game, players, night status) managed in `GameBoard` via polling/WebSocket
+- Action state (selections, results) managed in individual role action components
+- Accrued actions fetched separately and displayed in `AccruedActionsDisplay`
 
 ---
 

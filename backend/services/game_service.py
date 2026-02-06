@@ -28,12 +28,15 @@ def start_game(db: Session, game_set_id: str) -> Game:
     This creates a Game instance, shuffles roles, assigns them to players,
     and places 3 cards in the center.
 
+    If an active game already exists (not ended, not in RESULTS state),
+    returns that game instead of creating a duplicate.
+
     Args:
         db: Database session
         game_set_id: ID of the game set
 
     Returns:
-        The created Game instance
+        The created Game instance or existing active game
 
     Raises:
         ValueError: If game set not found or doesn't have enough players
@@ -42,6 +45,18 @@ def start_game(db: Session, game_set_id: str) -> Game:
     game_set = db.query(GameSet).filter(GameSet.game_set_id == game_set_id).first()
     if not game_set:
         raise ValueError(f"Game set {game_set_id} not found")
+
+    # Check if there's already an active game (not ended, not in RESULTS)
+    # This prevents multiple games from being created simultaneously
+    existing_active_game = db.query(Game).filter(
+        Game.game_set_id == game_set_id,
+        Game.ended_at.is_(None),
+        Game.state != GameState.RESULTS
+    ).order_by(Game.created_at.desc()).first()
+
+    if existing_active_game:
+        # Return the existing active game instead of creating a duplicate
+        return existing_active_game
 
     # Get all players in this game set
     players = game_set.players
@@ -147,6 +162,26 @@ def _get_team_for_role(role: str) -> str:
         return "tanner"
     else:
         return "village"
+
+
+def get_active_game(db: Session, game_set_id: str) -> Game | None:
+    """
+    Get the current active game for a game set.
+
+    An active game is one that hasn't ended and is not in RESULTS state.
+
+    Args:
+        db: Database session
+        game_set_id: ID of the game set
+
+    Returns:
+        The active Game instance, or None if no active game exists
+    """
+    return db.query(Game).filter(
+        Game.game_set_id == game_set_id,
+        Game.ended_at.is_(None),
+        Game.state != GameState.RESULTS
+    ).order_by(Game.created_at.desc()).first()
 
 
 def get_player_role(db: Session, game_id: str, player_id: str) -> PlayerRole:

@@ -6,6 +6,8 @@ from db.database import init_db
 from api.game_sets import router as game_sets_router
 from api.players import router as players_router
 from api.games import router as games_router
+# Import models to ensure they're registered with SQLAlchemy
+from models import action  # noqa: F401
 
 
 @asynccontextmanager

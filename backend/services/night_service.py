@@ -1,7 +1,10 @@
 """Service for night phase orchestration."""
+import random
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from models.game import Game, GameState
 from models.player_role import PlayerRole
+from models.center_card import CenterCard
 
 # Official wake order from One Night Ultimate Werewolf
 NIGHT_WAKE_ORDER = [
@@ -17,11 +20,21 @@ NIGHT_WAKE_ORDER = [
 ]
 
 
+def _is_role_assigned_to_player(db: Session, game_id: str, role: str) -> bool:
+    """Check if a role is assigned to any player (vs being in center cards)."""
+    player_role = db.query(PlayerRole).filter(
+        PlayerRole.game_id == game_id,
+        PlayerRole.current_role == role
+    ).first()
+    return player_role is not None
+
+
 def initialize_night_phase(db: Session, game_id: str) -> dict:
     """
     Initialize the night phase for a game.
 
-    Sets the current role to the first role in the wake order that exists in the game.
+    Sets the current role to the first role in active_roles (which includes all action roles
+    from both players and center cards).
 
     Args:
         db: Database session
@@ -40,19 +53,28 @@ def initialize_night_phase(db: Session, game_id: str) -> dict:
     if game.state != GameState.NIGHT:
         raise ValueError(f"Game {game_id} is not in NIGHT state")
 
-    # Get all roles assigned to players in this game
-    player_roles = db.query(PlayerRole).filter(PlayerRole.game_id == game_id).all()
-    roles_in_game = set([pr.current_role for pr in player_roles])
+    # Use active_roles from game (includes all action roles from players + center cards)
+    if not game.active_roles:
+        # Fallback: calculate active roles if not set
+        player_roles = db.query(PlayerRole).filter(PlayerRole.game_id == game_id).all()
+        center_cards = db.query(CenterCard).filter(CenterCard.game_id == game_id).all()
+        all_roles = set([pr.current_role for pr in player_roles] + [cc.role for cc in center_cards])
+        active_roles = [role for role in NIGHT_WAKE_ORDER if role in all_roles]
+        game.active_roles = active_roles
+        db.commit()
+        db.refresh(game)
 
-    # Find the first role in wake order that's actually in the game
-    current_role = None
-    for role in NIGHT_WAKE_ORDER:
-        if role in roles_in_game:
-            current_role = role
-            break
+    # Find the first role in active_roles
+    current_role = game.active_roles[0] if game.active_roles else None
 
     # Set the current role in the game
     game.current_role_step = current_role
+    
+    # If this role is not assigned to a player (it's in center), start simulation
+    if current_role and not _is_role_assigned_to_player(db, game_id, current_role):
+        game.simulated_role_started_at = datetime.utcnow()
+        game.simulated_role_duration_seconds = random.randint(15, 40)
+    
     db.commit()
     db.refresh(game)
 
@@ -60,8 +82,36 @@ def initialize_night_phase(db: Session, game_id: str) -> dict:
         "game_id": game_id,
         "current_role": current_role,
         "roles_completed": [],
-        "roles_in_game": list(roles_in_game),
+        "roles_in_game": game.active_roles or [],
     }
+
+
+def check_and_advance_simulated_role(db: Session, game_id: str) -> bool:
+    """
+    Check if a simulated role (center card role) has completed its time and advance it.
+    
+    Returns:
+        True if a simulated role was advanced, False otherwise
+    """
+    game = db.query(Game).filter(Game.game_id == game_id).first()
+    if not game or game.state != GameState.NIGHT:
+        return False
+    
+    if not game.current_role_step or not game.simulated_role_started_at:
+        return False
+    
+    # Check if current role is assigned to a player (if so, it's not simulated)
+    if _is_role_assigned_to_player(db, game_id, game.current_role_step):
+        return False
+    
+    # Check if simulation time has elapsed
+    elapsed = (datetime.utcnow() - game.simulated_role_started_at).total_seconds()
+    if elapsed >= game.simulated_role_duration_seconds:
+        # Auto-complete this simulated role
+        mark_role_complete(db, game_id, game.current_role_step)
+        return True
+    
+    return False
 
 
 def get_night_status(db: Session, game_id: str) -> dict:
@@ -76,7 +126,7 @@ def get_night_status(db: Session, game_id: str) -> dict:
         Dictionary with:
         - current_role: The role currently acting (or None if night is over)
         - roles_completed: List of roles that have completed their actions
-        - roles_in_game: List of all roles assigned to players
+        - roles_in_game: List of all active roles (from active_roles)
 
     Raises:
         ValueError: If game not found
@@ -85,32 +135,33 @@ def get_night_status(db: Session, game_id: str) -> dict:
     if not game:
         raise ValueError(f"Game {game_id} not found")
 
-    # Get all roles in the game
-    player_roles = db.query(PlayerRole).filter(PlayerRole.game_id == game_id).all()
-    roles_in_game = set([pr.current_role for pr in player_roles])
+    # Check and advance simulated roles if needed
+    check_and_advance_simulated_role(db, game_id)
+    db.refresh(game)
+
+    # Use active_roles from game (includes all action roles)
+    active_roles = game.active_roles or []
 
     # Calculate completed roles by checking which roles come before current_role
     roles_completed = []
     if game.current_role_step:
-        for role in NIGHT_WAKE_ORDER:
-            if role == game.current_role_step:
-                break
-            if role in roles_in_game:
-                roles_completed.append(role)
+        current_index = active_roles.index(game.current_role_step) if game.current_role_step in active_roles else -1
+        if current_index > 0:
+            roles_completed = active_roles[:current_index]
     else:
         # If current_role_step is None, all roles are complete
-        roles_completed = [role for role in NIGHT_WAKE_ORDER if role in roles_in_game]
+        roles_completed = active_roles
 
     return {
         "current_role": game.current_role_step,
         "roles_completed": roles_completed,
-        "roles_in_game": list(roles_in_game),
+        "roles_in_game": active_roles,
     }
 
 
 def mark_role_complete(db: Session, game_id: str, role: str) -> dict:
     """
-    Mark a role as complete and advance to the next role in the wake order.
+    Mark a role as complete and advance to the next role in active_roles.
 
     Args:
         db: Database session
@@ -139,24 +190,31 @@ def mark_role_complete(db: Session, game_id: str, role: str) -> dict:
             f"Current role is '{game.current_role_step}'"
         )
 
-    # Get all roles in the game
-    player_roles = db.query(PlayerRole).filter(PlayerRole.game_id == game_id).all()
-    roles_in_game = set([pr.current_role for pr in player_roles])
+    # Use active_roles from game (includes all action roles from players + center cards)
+    active_roles = game.active_roles or []
+    
+    # Find the next role in active_roles
+    try:
+        current_role_index = active_roles.index(role)
+        next_role = active_roles[current_role_index + 1] if current_role_index + 1 < len(active_roles) else None
+    except ValueError:
+        # Role not in active_roles (shouldn't happen, but handle gracefully)
+        next_role = None
 
-    # Find the next role in wake order
-    current_role_index = NIGHT_WAKE_ORDER.index(role)
-    next_role = None
-
-    for i in range(current_role_index + 1, len(NIGHT_WAKE_ORDER)):
-        candidate_role = NIGHT_WAKE_ORDER[i]
-        if candidate_role in roles_in_game:
-            next_role = candidate_role
-            break
+    # Clear simulation fields
+    game.simulated_role_started_at = None
+    game.simulated_role_duration_seconds = None
 
     # Update game state
     if next_role:
         # Move to next role
         game.current_role_step = next_role
+        
+        # If next role is not assigned to a player (it's in center), start simulation
+        if not _is_role_assigned_to_player(db, game_id, next_role):
+            game.simulated_role_started_at = datetime.utcnow()
+            game.simulated_role_duration_seconds = random.randint(15, 40)
+        
         db.commit()
         db.refresh(game)
 

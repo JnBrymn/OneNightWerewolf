@@ -24,6 +24,13 @@ interface PlayersResponse {
   required_count: number
 }
 
+interface ActiveGame {
+  game_id: string
+  game_set_id: string
+  game_number: number
+  state: string
+}
+
 export default function Lobby() {
   const router = useRouter()
   const params = useParams()
@@ -32,6 +39,7 @@ export default function Lobby() {
 
   const [gameSet, setGameSet] = useState<GameSet | null>(null)
   const [playersData, setPlayersData] = useState<PlayersResponse | null>(null)
+  const [activeGame, setActiveGame] = useState<ActiveGame | null>(null)
   const [error, setError] = useState('')
   const [isStarting, setIsStarting] = useState(false)
 
@@ -76,6 +84,35 @@ export default function Lobby() {
       return () => clearInterval(interval)
     }
   }, [game_set_id])
+
+  // Poll for active game and auto-redirect if found
+  useEffect(() => {
+    async function checkActiveGame() {
+      try {
+        const response = await fetch(`/api/game-sets/${game_set_id}/active-game`)
+        if (response.ok) {
+          const data = await response.json()
+          setActiveGame(data)
+          // Auto-redirect to the active game
+          if (currentPlayerId) {
+            router.push(`/game/${data.game_id}?player_id=${currentPlayerId}`)
+          }
+        } else if (response.status === 404) {
+          // No active game exists, clear state
+          setActiveGame(null)
+        }
+      } catch (err: any) {
+        // Silently ignore errors (game might not exist yet)
+        console.error('Error checking active game:', err)
+      }
+    }
+
+    if (game_set_id && !isStarting) {
+      checkActiveGame() // Check immediately
+      const interval = setInterval(checkActiveGame, 2000) // Then every 2 seconds
+      return () => clearInterval(interval)
+    }
+  }, [game_set_id, isStarting, currentPlayerId, router])
 
   const handleStartGame = async () => {
     setIsStarting(true)
@@ -137,7 +174,7 @@ export default function Lobby() {
     )
   }
 
-  const canStartGame = playersData.current_count === playersData.required_count
+  const canStartGame = playersData.current_count === playersData.required_count && !activeGame
   const roleCounts: { [key: string]: number } = {}
   gameSet.selected_roles.forEach(role => {
     roleCounts[role] = (roleCounts[role] || 0) + 1
@@ -307,42 +344,58 @@ export default function Lobby() {
         </div>
       )}
 
-      {/* Start Game Button */}
-      <div style={{ display: 'flex', gap: '1rem' }}>
-        <button
-          onClick={handleStartGame}
-          disabled={!canStartGame || isStarting}
-          style={{
-            padding: '1rem 2rem',
-            fontSize: '1.2rem',
-            cursor: !canStartGame || isStarting ? 'not-allowed' : 'pointer',
-            backgroundColor: !canStartGame || isStarting ? '#95a5a6' : '#27ae60',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontWeight: 'bold',
-            flex: 1
-          }}
-        >
-          {isStarting ? 'Starting...' : canStartGame ? 'Start Game' : 'Waiting for Players...'}
-        </button>
+      {/* Active Game Notice */}
+      {activeGame && (
+        <div style={{
+          padding: '1rem',
+          backgroundColor: '#d1ecf1',
+          color: '#0c5460',
+          borderRadius: '4px',
+          marginBottom: '1rem',
+          textAlign: 'center'
+        }}>
+          Game has started! Redirecting you to the game...
+        </div>
+      )}
 
-        <button
-          onClick={() => router.push('/')}
-          style={{
-            padding: '1rem 2rem',
-            fontSize: '1.2rem',
-            cursor: 'pointer',
-            backgroundColor: '#95a5a6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontWeight: 'bold'
-          }}
-        >
-          Leave
-        </button>
-      </div>
+      {/* Start Game Button */}
+      {!activeGame && (
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button
+            onClick={handleStartGame}
+            disabled={!canStartGame || isStarting}
+            style={{
+              padding: '1rem 2rem',
+              fontSize: '1.2rem',
+              cursor: !canStartGame || isStarting ? 'not-allowed' : 'pointer',
+              backgroundColor: !canStartGame || isStarting ? '#95a5a6' : '#27ae60',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontWeight: 'bold',
+              flex: 1
+            }}
+          >
+            {isStarting ? 'Starting...' : canStartGame ? 'Start Game' : 'Waiting for Players...'}
+          </button>
+
+          <button
+            onClick={() => router.push('/')}
+            style={{
+              padding: '1rem 2rem',
+              fontSize: '1.2rem',
+              cursor: 'pointer',
+              backgroundColor: '#95a5a6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontWeight: 'bold'
+            }}
+          >
+            Leave
+          </button>
+        </div>
+      )}
     </main>
   )
 }

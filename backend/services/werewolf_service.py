@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from models.game import Game, GameState
 from models.player_role import PlayerRole
 from models.center_card import CenterCard
+from models.action import Action, ActionType
 from services import night_service
 
 CENTER_POSITIONS = ["left", "center", "right"]
@@ -86,6 +87,18 @@ def view_center_card(db: Session, game_id: str, player_id: str, card_index: int)
     if not center_card:
         raise ValueError("Center card not found")
 
+    # Create action record
+    action = Action(
+        game_id=game_id,
+        player_id=player_id,
+        action_type=ActionType.VIEW_CARD,
+        source_id=str(card_index),  # Center card index
+        target_id=str(card_index),
+        source_role=center_card.role,
+        target_role=center_card.role
+    )
+    db.add(action)
+
     player_role.night_action_completed = True
     db.commit()
 
@@ -115,6 +128,22 @@ def acknowledge_werewolf(db: Session, game_id: str, player_id: str) -> dict:
         raise ValueError("Player is not a Werewolf")
 
     if not player_role.night_action_completed:
+        # Create action records for each other werewolf this player sees
+        werewolf_roles = _get_werewolf_roles(db, game_id)
+        for other_role in werewolf_roles:
+            if other_role.player_id != player_id:
+                # Create VIEW_CARD action for each other werewolf
+                action = Action(
+                    game_id=game_id,
+                    player_id=player_id,
+                    action_type=ActionType.VIEW_CARD,
+                    source_id=other_role.player_id,
+                    target_id=other_role.player_id,
+                    source_role="Werewolf",
+                    target_role="Werewolf"
+                )
+                db.add(action)
+        
         player_role.night_action_completed = True
         db.commit()
 
