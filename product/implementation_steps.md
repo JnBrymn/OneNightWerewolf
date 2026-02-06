@@ -2,68 +2,80 @@
 
 ## 🎯 CURRENT STATUS (Updated: 2026-02-05)
 
-### ✅ Simulated Role Actions Implemented
-
-**Feature Added:**
-To maintain secrecy about which roles are in play, the system now processes ALL action roles during the night phase, even if they're only in center cards (not assigned to players). Center card roles are automatically simulated with random delays (15-40 seconds) so players cannot deduce which roles are actually in play.
-
-**Implementation Details:**
-- `Game` model tracks simulated role timing (`simulated_role_started_at`, `simulated_role_duration_seconds`)
-- `night_service.py` uses `game.active_roles` (includes all action roles from players + center cards)
-- `check_and_advance_simulated_role()` automatically advances center card roles after their timer expires
-- Frontend polls every 1 second to catch simulated role completions quickly
-- All players see "Waiting for [Role] to complete their action..." for all active roles, maintaining secrecy
-
-### ✅ Step 5.5 Complete: Unified Game Screen Architecture Refactored
-
-**Completed:**
-The implementation has been successfully refactored to align with the unified game screen architecture and component structure specified in the product design. All key issues have been addressed:
-
-1. ✅ **Component Structure**: Monolithic component broken into modular components:
-   - `GameBoard.tsx` - Main container component
-   - `PlayerGrid.tsx` - Grid of player buttons
-   - `PlayerButton.tsx` - Individual player button
-   - `CenterCardButton.tsx` - Center card button (overlay only)
-   - `AccruedActionsDisplay.tsx` - Persistent actions section
-   - `PhaseIndicator.tsx` - Phase display
-   - `ActionOverlay.tsx` - Full-screen overlay container
-   - `RoleActionHandler.tsx` - Routes to role-specific components
-   - `WerewolfAction.tsx` - Werewolf-specific action logic
-   - `RoleReveal.tsx` - Role reveal with acknowledgment
-
-2. ✅ **Action Overlay**: Full-screen overlay system implemented. Overlay appears automatically when it's a player's turn, showing role-specific instructions and action buttons.
-
-3. ✅ **Center Cards**: Center cards only appear in action overlay (never on main screen).
-
-4. ✅ **API Integration**: Integrated with `available-actions` and `actions` endpoints:
-   - `GET /api/games/{game_id}/players/{player_id}/available-actions`
-   - `GET /api/games/{game_id}/players/{player_id}/actions`
-   - Backend: Action model and service created
-   - Backend: Tests written for new endpoints
-
-5. ✅ **State Management**: UI properly adapts based on `game.state` (NIGHT, DAY_DISCUSSION, DAY_VOTING).
-
-6. ✅ **Role Reveal**: Requires acknowledgment (no auto-dismiss).
-
-**Backend Changes:**
-- Created `Action` model (`backend/models/action.py`) for tracking night phase actions
-- Created `action_service.py` with `get_available_actions()` and `get_player_actions()` functions
-- Added API endpoints for available actions and accrued actions
-- Updated `werewolf_service.py` to create action records
-- **Simulated role actions**: Added logic to process all action roles (including center card roles) with random delays to maintain secrecy
-- Added tests (`test_action_service.py`)
-
-**Frontend Changes:**
-- Complete component refactoring with modular structure
-- Action overlay shows automatically when it's player's turn
-- Werewolf action properly integrated with overlay system
-- Fixed overlay display logic to show for all roles when it's their turn
-- Improved error handling and loading states
-
----
+**Progress:** Step 7 Complete (35% of 20 steps)
 
 ### ✅ Completed Steps:
-- **Step 1**: Project Setup & Basic Infrastructure ✅
+- Step 1: Project Setup & Basic Infrastructure
+- Step 2: Game Set Creation (Lobby Start)
+- Step 3: Player Management & Lobby
+- Step 4: Game Creation & Role Assignment
+- Step 5: Night Phase - Basic Infrastructure (with simulated role actions)
+- Step 5.5: Unified Game Screen Architecture Refactored
+- Step 6: Night Phase - Werewolf Role
+- Step 7: Night Phase - Seer Role
+
+### 🚀 Next Steps: Step 8 - Night Phase - Robber Role
+
+**Current State:**
+- Night phase infrastructure is complete with simulated role actions for secrecy
+- Unified game screen architecture is in place with modular components
+- Werewolf and Seer roles are fully implemented (backend services, API endpoints, frontend components, tests)
+- `action_service.py` already handles Robber in `get_available_actions()` (returns actionable players)
+- `RoleActionHandler.tsx` currently shows placeholder for Robber
+
+**Implementation Plan:**
+
+Following the established pattern from Seer and Werewolf implementations:
+
+1. **Backend Tests First** (TDD):
+   - Create `backend/tests/test_robber_role.py`
+   - Test: Robber exchanges with target player and views new role
+   - Test: Action record is created (SWAP_PLAYER_TO_PLAYER type)
+   - Test: Cannot exchange with self
+   - Test: Role completion advances night phase
+
+2. **Backend Service**:
+   - Create `backend/services/robber_service.py`
+   - Function: `perform_robber_action(db, game_id, player_id, target_player_id)`
+   - Exchange `current_role` between Robber and target
+   - Update both `PlayerRole.current_role` fields
+   - Create `Action` record with `ActionType.SWAP_PLAYER_TO_PLAYER`
+   - Mark `night_action_completed = True` for Robber
+   - Call `night_service.mark_role_complete()` when all Robbers have acted
+   - Return `{"new_role": "...", "message": "You are now the ..."}`
+
+3. **Backend API Endpoint**:
+   - Add to `backend/api/games.py`: `POST /api/games/{game_id}/players/{player_id}/robber-action`
+   - Request body: `{"target_player_id": "..."}`
+   - Call `robber_service.perform_robber_action()`
+   - Add schema to `backend/models/schemas.py` if needed
+
+4. **Frontend Component**:
+   - Create `frontend/components/game/actions/roles/RobberAction.tsx`
+   - Step 1: Display actionable players from `availableActions.actionable_players`
+   - Step 2: On player click, call API endpoint
+   - Step 3: Display result: "You robbed [player name] and took their card. You are now: [NEW ROLE]"
+   - Step 4: "OK" button calls `onActionComplete()` to dismiss overlay
+   - Action persists in Accrued Actions section automatically (via existing `get_player_actions` endpoint)
+
+5. **Update Role Handler**:
+   - Update `frontend/components/game/actions/RoleActionHandler.tsx`
+   - Add route: `if (role === 'Robber')` → render `<RobberAction />`
+
+**Key Files to Create/Modify:**
+- `backend/tests/test_robber_role.py` (new)
+- `backend/services/robber_service.py` (new)
+- `backend/api/games.py` (add endpoint)
+- `frontend/components/game/actions/roles/RobberAction.tsx` (new)
+- `frontend/components/game/actions/RoleActionHandler.tsx` (add route)
+
+**Reference Implementation:**
+- Look at `backend/services/seer_service.py` for service pattern
+- Look at `backend/api/games.py` lines 119-137 for endpoint pattern
+- Look at `frontend/components/game/actions/roles/SeerAction.tsx` for component pattern
+- Look at `backend/tests/test_seer_role.py` for test pattern
+
+---
 - **Step 2**: Game Set Creation (Lobby Start) ✅
 - **Step 3**: Player Management & Lobby ✅
 - **Step 4**: Game Creation & Role Assignment ✅
@@ -77,30 +89,25 @@ The implementation has been successfully refactored to align with the unified ga
   - Frontend: Night phase UI with role display, loading spinner, progress tracking
   - Frontend: 1-second polling for night status updates (to catch simulated role completions)
   - Tests: 6 new backend tests passing (test_night_phase.py)
-- **Step 6**: Night Phase - Werewolf Role (Prototype) ✅
+- **Step 6**: Night Phase - Werewolf Role ✅
   - Backend: Werewolf role logic (identify other werewolves, lone wolf center card viewing)
-  - Backend: Endpoints for werewolf night actions
-  - Backend: Tests added for werewolf role
-  - Frontend: Werewolf turn flow implemented (prototype - needs refactoring)
+  - Backend: Endpoints for werewolf night actions (GET /api/games/{game_id}/players/{player_id}/night-info, POST /api/games/{game_id}/players/{player_id}/view-center, POST /api/games/{game_id}/players/{player_id}/acknowledge)
+  - Backend: Tests added for werewolf role (test_werewolf_role.py)
+  - Frontend: WerewolfAction component with overlay system
+  - Frontend: Handles multiple werewolves and lone wolf scenarios
 - **Step 5.5**: Refactor to Unified Game Screen Architecture ✅
   - Backend: Action model, action_service, API endpoints for available-actions and actions
   - Backend: Tests for action service endpoints
   - Frontend: Complete component refactoring (GameBoard, PlayerGrid, ActionOverlay, etc.)
   - Frontend: Werewolf action integrated with overlay system
   - Frontend: Proper state-based UI adaptation
-
-### 🚀 NEXT STEP: Step 7 - Night Phase - Seer Role
-**What to implement:**
-- Backend: Seer role logic (view player or two center cards)
-- Backend: Endpoint for Seer action
-- Frontend: Seer action overlay (instructions + player/center buttons)
-- Persist Seer actions to "Your information"
-**Key files to work on:**
-- Backend: Add Seer endpoints to `api/games.py`
-- Backend: Add Seer logic to `services/seer_service.py` (new file)
-- Backend: Add tests in `tests/test_seer_role.py`
-- Frontend: Create `components/game/actions/roles/SeerAction.tsx`
-- Frontend: Update `RoleActionHandler.tsx` to route to SeerAction
+- **Step 7**: Night Phase - Seer Role ✅
+  - Backend: Seer role logic (view player OR view two center cards)
+  - Backend: Endpoint POST /api/games/{game_id}/players/{player_id}/seer-action
+  - Backend: Creates separate action records for each center card viewed
+  - Backend: Tests added (test_seer_role.py)
+  - Frontend: SeerAction component with multi-step flow (action type selection → player/center selection → result display)
+  - Frontend: Actions persist in Accrued Actions section
 
 ---
 
@@ -1110,8 +1117,8 @@ curl http://localhost:8000/api/games/{game_id}/night-status
        robber_after = get_player_role(game_id, robber_id)
        target_after = get_player_role(game_id, target_id)
 
-       assert robber_after["final_role"] == target_original["initial_role"]
-       assert target_after["final_role"] == "Robber"
+       assert robber_after["current_role"] == target_original["initial_role"]
+       assert target_after["current_role"] == "Robber"
 
    def test_robber_creates_action_record():
        game_id = ...
@@ -1148,7 +1155,7 @@ curl http://localhost:8000/api/games/{game_id}/night-status
 2. **Implement Robber logic**
    - Validate player is Robber
    - Exchange roles between Robber and target player
-   - Update final_role for both players
+   - Update current_role for both players
    - Return new role to Robber (for viewing)
    - Create action record in database
    - Mark Robber role complete
@@ -1183,7 +1190,7 @@ curl -X POST http://localhost:8000/api/games/{game_id}/players/{robber_id}/robbe
 # Verify exchange in game state
 curl http://localhost:8000/api/games/{game_id}/players/{robber_id}/role \
   -H "X-Player-ID: {robber_id}"
-# Expected: {"final_role": "Seer"}
+# Expected: {"current_role": "Seer"}
 ```
 
 **Frontend:**
@@ -1221,8 +1228,8 @@ curl http://localhost:8000/api/games/{game_id}/players/{robber_id}/role \
        p1_after = get_player_role(game_id, player1_id)
        p2_after = get_player_role(game_id, player2_id)
 
-       assert p1_after["final_role"] == p2_original["initial_role"]
-       assert p2_after["final_role"] == p1_original["initial_role"]
+       assert p1_after["current_role"] == p2_original["initial_role"]
+       assert p2_after["current_role"] == p1_original["initial_role"]
 
    def test_drunk_exchanges_with_center():
        game_id = ...
@@ -1248,14 +1255,14 @@ curl http://localhost:8000/api/games/{game_id}/players/{robber_id}/role \
        drunk_after = get_player_role(game_id, drunk_id)
        center_after = get_center_card(game_id, 1)
 
-       assert drunk_after["final_role"] == center_original["role"]
+       assert drunk_after["current_role"] == center_original["role"]
        assert center_after["role"] == drunk_original["initial_role"]
    ```
 
 2. **Implement Troublemaker & Drunk logic**
    - Troublemaker: Exchange two other players (no viewing)
    - Drunk: Exchange with center card (no viewing)
-   - Update final_role for affected players
+   - Update current_role for affected players
    - Create action records
    - Mark roles complete
 
@@ -1676,7 +1683,7 @@ curl http://localhost:8000/api/games/{game_id}
 2. **Implement win condition logic**
    - Count votes, determine who dies (ties = all tied players die)
    - Apply Hunter effect (if Hunter dies, kill their vote target too)
-   - Determine final roles for all players (after night actions)
+   - Determine current roles for all players (after night actions)
    - Determine teams (village, werewolf, tanner)
    - Calculate winners based on rules:
      - Village wins: at least one werewolf dies
@@ -1693,10 +1700,10 @@ curl http://localhost:8000/api/games/{game_id}
    - Show "Results" header
    - Display vote counts for each player
    - Show who died
-   - Reveal all final roles (show role cards face-up)
+   - Reveal all current roles (show role cards face-up)
    - Show team assignments (color-coded: green=village, red=werewolf, purple=tanner)
    - Show winners announcement: "VILLAGE WINS!" or "WEREWOLVES WIN!" or "TANNER WINS!"
-   - List individual player results (name, final role, team, win/loss)
+   - List individual player results (name, current role, team, win/loss)
    - "Play Another Game" and "End Game Set" buttons
 
 ### Demo
@@ -1712,7 +1719,7 @@ curl http://localhost:8000/api/games/{game_id}/results
 #       "player_id": "alice_id",
 #       "player_name": "Alice",
 #       "initial_role": "Werewolf",
-#       "final_role": "Werewolf",
+#       "current_role": "Werewolf",
 #       "team": "werewolf",
 #       "died": true,
 #       "won": false
@@ -1721,7 +1728,7 @@ curl http://localhost:8000/api/games/{game_id}/results
 #       "player_id": "bob_id",
 #       "player_name": "Bob",
 #       "initial_role": "Seer",
-#       "final_role": "Seer",
+#       "current_role": "Seer",
 #       "team": "village",
 #       "died": false,
 #       "won": true
@@ -2062,7 +2069,7 @@ curl http://localhost:8000/api/game-sets/{game_set_id}/chat
 
        results = client.get(f"/api/games/{game_id}/results").json()
 
-       minion_player = next(p for p in results["players"] if p["final_role"] == "Minion")
+       minion_player = next(p for p in results["players"] if p["current_role"] == "Minion")
        assert minion_player["won"] == True
 
    def test_tanner_only_wins_if_dies():
@@ -2073,7 +2080,7 @@ curl http://localhost:8000/api/game-sets/{game_set_id}/chat
 
        # Only Tanner wins, everyone else loses
        for player in results["players"]:
-           if player["final_role"] == "Tanner":
+           if player["current_role"] == "Tanner":
                assert player["won"] == True
            else:
                assert player["won"] == False
@@ -2086,7 +2093,7 @@ curl http://localhost:8000/api/game-sets/{game_set_id}/chat
        results = client.get(f"/api/games/{game_id}/results").json()
 
        # Both Hunter and Bob should be dead
-       hunter_player = next(p for p in results["players"] if p["final_role"] == "Hunter")
+       hunter_player = next(p for p in results["players"] if p["current_role"] == "Hunter")
        bob_player = next(p for p in results["players"] if p["player_name"] == "Bob")
 
        assert hunter_player["died"] == True

@@ -100,7 +100,7 @@ A digital implementation of the One Night Ultimate Werewolf card game, built as 
 - **Results Screen**: 
   - Current game results:
     - Who died (if anyone)
-    - Final role assignments (after all night actions)
+    - Current role assignments (after all night actions)
     - Team assignments (Village team, Werewolf team, or Other/Tanner)
     - Winners announcement (based on team and win conditions)
   - **Cumulative Score Board**: 
@@ -238,7 +238,7 @@ Each role has its own action component that handles role-specific interactions:
   - Only visible during DAY_VOTING phase
 
 - **`ResultsDisplay`** (`components/game/ResultsDisplay.tsx`): Results screen
-  - Shows vote counts, deaths, final roles
+  - Shows vote counts, deaths, current roles
   - Shows team assignments and winners
   - "Play Another Game" and "End Game Set" buttons
 
@@ -495,7 +495,7 @@ Each role has its own action component that handles role-specific interactions:
   - Query Player Role table for all games in a Game Set
   - Join with Votes table to determine who died in each game
   - Apply win condition logic to determine winners for each game
-  - Check if each player's team won (based on final_role, team, was_killed, and deaths)
+  - Check if each player's team won (based on current_role, team, was_killed, and deaths)
   - Aggregate wins/losses per player across all games in the game set
 - **No separate Game Score table needed** - all data exists in Player Role, Votes, and Game tables
 
