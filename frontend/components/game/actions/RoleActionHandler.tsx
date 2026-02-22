@@ -2,6 +2,7 @@
 
 import WerewolfAction from './roles/WerewolfAction'
 import SeerAction from './roles/SeerAction'
+import RobberAction from './roles/RobberAction'
 
 interface RoleActionHandlerProps {
   role: string
@@ -39,6 +40,17 @@ export default function RoleActionHandler({
   if (role === 'Seer') {
     return (
       <SeerAction
+        gameId={gameId}
+        playerId={playerId}
+        availableActions={availableActions}
+        onActionComplete={onActionComplete}
+      />
+    )
+  }
+
+  if (role === 'Robber') {
+    return (
+      <RobberAction
         gameId={gameId}
         playerId={playerId}
         availableActions={availableActions}

@@ -20,7 +20,7 @@ Start both servers:
 
 - **`start_servers.sh`** - Starts both backend and frontend dev servers with dependency checks
 - **`deploy_fly.sh`** - Deploys the app to Fly.io (checks auth, creates app if needed)
-- **`dev_seed_game.sh`** - Creates a test game with players for development/testing
+- **`dev_seed_game.py`** - Creates a test game (random 3-player by default). Use `--players` (CSV of roles for player 1..N) and `--center` (CSV of 3 center roles, left to right) to fix setup; roles can be lowercase or short codes (e.g. `w,s,v`). Run `python scripts/dev_seed_game.py --help` for details.
 - **`start_prod.sh`** - Production startup script for Fly.io (runs both servers)
 
 ## Development

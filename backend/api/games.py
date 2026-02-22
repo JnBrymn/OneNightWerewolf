@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from db.database import get_db
 from models.game import Game, GameState
-from models.schemas import NightStatusCompleteRequest, ViewCenterRequest, SeerActionRequest
-from services import game_service, night_service, werewolf_service, action_service, seer_service
+from models.schemas import NightStatusCompleteRequest, ViewCenterRequest, SeerActionRequest, RobberActionRequest
+from services import game_service, night_service, werewolf_service, action_service, seer_service, robber_service
 
 router = APIRouter(prefix="/api/games", tags=["games"])
 
@@ -132,6 +132,25 @@ def perform_seer_action(
             payload.action_type,
             payload.target_player_id,
             payload.card_indices
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{game_id}/players/{player_id}/robber-action")
+def perform_robber_action(
+    game_id: str,
+    player_id: str,
+    payload: RobberActionRequest,
+    db: Session = Depends(get_db)
+):
+    """Perform Robber action: exchange cards with another player and view new role."""
+    try:
+        return robber_service.perform_robber_action(
+            db,
+            game_id,
+            player_id,
+            payload.target_player_id
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

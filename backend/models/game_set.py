@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, JSON, DateTime
+from sqlalchemy import Column, String, Integer, JSON, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from db.database import Base
@@ -14,6 +14,7 @@ class GameSet(Base):
     num_players = Column(Integer, nullable=False)
     selected_roles = Column(JSON, nullable=False)  # Array of role names
     discussion_timer_seconds = Column(Integer, nullable=False, default=300)
+    assign_in_order = Column(Boolean, nullable=False, default=False)  # If True, assign roles in list order (e.g. for dev seed)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     ended_at = Column(DateTime(timezone=True), nullable=True)

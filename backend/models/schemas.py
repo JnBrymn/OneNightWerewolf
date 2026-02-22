@@ -75,6 +75,11 @@ class ViewCenterRequest(BaseModel):
     card_index: int = Field(..., ge=0, le=2, description="Center card index (0-2)")
 
 
+class RobberActionRequest(BaseModel):
+    """Schema for Robber action."""
+    target_player_id: str = Field(..., min_length=1, description="Player ID to rob (exchange cards with)")
+
+
 class SeerActionRequest(BaseModel):
     """Schema for Seer action."""
     action_type: str = Field(..., description="Either 'view_player' or 'view_center'")

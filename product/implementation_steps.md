@@ -1,8 +1,8 @@
 # One Night Werewolf - Implementation Steps
 
-## 🎯 CURRENT STATUS (Updated: 2026-02-05)
+## 🎯 CURRENT STATUS (Updated: 2026-02-21)
 
-**Progress:** Step 7 Complete (35% of 20 steps)
+**Progress:** Step 8 Complete (40% of 20 steps)
 
 ### ✅ Completed Steps:
 - Step 1: Project Setup & Basic Infrastructure
@@ -13,67 +13,13 @@
 - Step 5.5: Unified Game Screen Architecture Refactored
 - Step 6: Night Phase - Werewolf Role
 - Step 7: Night Phase - Seer Role
+- Step 8: Night Phase - Robber Role
 
-### 🚀 Next Steps: Step 8 - Night Phase - Robber Role
+### 🚀 Next Steps: Step 9 - Night Phase - Troublemaker & Drunk
 
 **Current State:**
-- Night phase infrastructure is complete with simulated role actions for secrecy
-- Unified game screen architecture is in place with modular components
-- Werewolf and Seer roles are fully implemented (backend services, API endpoints, frontend components, tests)
-- `action_service.py` already handles Robber in `get_available_actions()` (returns actionable players)
-- `RoleActionHandler.tsx` currently shows placeholder for Robber
-
-**Implementation Plan:**
-
-Following the established pattern from Seer and Werewolf implementations:
-
-1. **Backend Tests First** (TDD):
-   - Create `backend/tests/test_robber_role.py`
-   - Test: Robber exchanges with target player and views new role
-   - Test: Action record is created (SWAP_PLAYER_TO_PLAYER type)
-   - Test: Cannot exchange with self
-   - Test: Role completion advances night phase
-
-2. **Backend Service**:
-   - Create `backend/services/robber_service.py`
-   - Function: `perform_robber_action(db, game_id, player_id, target_player_id)`
-   - Exchange `current_role` between Robber and target
-   - Update both `PlayerRole.current_role` fields
-   - Create `Action` record with `ActionType.SWAP_PLAYER_TO_PLAYER`
-   - Mark `night_action_completed = True` for Robber
-   - Call `night_service.mark_role_complete()` when all Robbers have acted
-   - Return `{"new_role": "...", "message": "You are now the ..."}`
-
-3. **Backend API Endpoint**:
-   - Add to `backend/api/games.py`: `POST /api/games/{game_id}/players/{player_id}/robber-action`
-   - Request body: `{"target_player_id": "..."}`
-   - Call `robber_service.perform_robber_action()`
-   - Add schema to `backend/models/schemas.py` if needed
-
-4. **Frontend Component**:
-   - Create `frontend/components/game/actions/roles/RobberAction.tsx`
-   - Step 1: Display actionable players from `availableActions.actionable_players`
-   - Step 2: On player click, call API endpoint
-   - Step 3: Display result: "You robbed [player name] and took their card. You are now: [NEW ROLE]"
-   - Step 4: "OK" button calls `onActionComplete()` to dismiss overlay
-   - Action persists in Accrued Actions section automatically (via existing `get_player_actions` endpoint)
-
-5. **Update Role Handler**:
-   - Update `frontend/components/game/actions/RoleActionHandler.tsx`
-   - Add route: `if (role === 'Robber')` → render `<RobberAction />`
-
-**Key Files to Create/Modify:**
-- `backend/tests/test_robber_role.py` (new)
-- `backend/services/robber_service.py` (new)
-- `backend/api/games.py` (add endpoint)
-- `frontend/components/game/actions/roles/RobberAction.tsx` (new)
-- `frontend/components/game/actions/RoleActionHandler.tsx` (add route)
-
-**Reference Implementation:**
-- Look at `backend/services/seer_service.py` for service pattern
-- Look at `backend/api/games.py` lines 119-137 for endpoint pattern
-- Look at `frontend/components/game/actions/roles/SeerAction.tsx` for component pattern
-- Look at `backend/tests/test_seer_role.py` for test pattern
+- Robber fully implemented (backend service, API, frontend RobberAction, tests)
+- Night phase: Werewolf → Seer → Robber working; Troublemaker and Drunk still placeholders
 
 ---
 - **Step 2**: Game Set Creation (Lobby Start) ✅
@@ -108,6 +54,12 @@ Following the established pattern from Seer and Werewolf implementations:
   - Backend: Tests added (test_seer_role.py)
   - Frontend: SeerAction component with multi-step flow (action type selection → player/center selection → result display)
   - Frontend: Actions persist in Accrued Actions section
+- **Step 8**: Night Phase - Robber Role ✅
+  - Backend: robber_service.perform_robber_action (swap cards, create SWAP_PLAYER_TO_PLAYER action, advance role)
+  - Backend: POST /api/games/{game_id}/players/{player_id}/robber-action
+  - Backend: Tests (test_robber_role.py)
+  - Frontend: RobberAction component (choose player → result → OK)
+  - Frontend: RoleActionHandler routes Robber to RobberAction
 
 ---
 
@@ -713,7 +665,7 @@ curl http://localhost:8000/api/games/{game_id}/night-status
        └── roles/
            ├── WerewolfAction.tsx
            ├── SeerAction.tsx (placeholder for Step 7)
-           ├── RobberAction.tsx (placeholder for Step 8)
+           ├── RobberAction.tsx ✅
            └── ...
    ```
 
@@ -1088,7 +1040,7 @@ curl http://localhost:8000/api/games/{game_id}/night-status
 
 ---
 
-## Step 8: Night Phase - Robber Role (Action with View)
+## Step 8: Night Phase - Robber Role (Action with View) ✅ COMPLETED
 
 ### Backend Tasks
 1. **Write Tests First** (`tests/test_robber_role.py`)
