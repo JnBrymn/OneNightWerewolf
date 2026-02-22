@@ -436,6 +436,7 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
         >
           <RoleActionHandler
             role={playerRole.current_role}
+            currentRoleStep={game.current_role_step}
             gameId={gameId}
             playerId={currentPlayerId || ''}
             nightInfo={nightInfo}

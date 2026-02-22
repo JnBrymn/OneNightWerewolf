@@ -9,8 +9,11 @@ import InsomniacAction from './roles/InsomniacAction'
 import MinionAction from './roles/MinionAction'
 import MasonAction from './roles/MasonAction'
 
+const NIGHT_INFO_ROLES = ['Werewolf', 'Minion', 'Mason', 'Insomniac']
+
 interface RoleActionHandlerProps {
   role: string
+  currentRoleStep?: string | null
   gameId: string
   playerId: string
   nightInfo?: any
@@ -24,13 +27,18 @@ interface RoleActionHandlerProps {
 
 export default function RoleActionHandler({
   role,
+  currentRoleStep,
   gameId,
   playerId,
   nightInfo,
   availableActions,
   onActionComplete
 }: RoleActionHandlerProps) {
-  if (role === 'Werewolf') {
+  // Use current step for night-info roles so we always show the right action (e.g. Insomniac)
+  const effectiveRole = currentRoleStep && NIGHT_INFO_ROLES.includes(currentRoleStep)
+    ? currentRoleStep
+    : role
+  if (effectiveRole === 'Werewolf') {
     return (
       <WerewolfAction
         gameId={gameId}
@@ -40,7 +48,7 @@ export default function RoleActionHandler({
       />
     )
   }
-  if (role === 'Seer') {
+  if (effectiveRole === 'Seer') {
     return (
       <SeerAction
         gameId={gameId}
@@ -50,7 +58,7 @@ export default function RoleActionHandler({
       />
     )
   }
-  if (role === 'Robber') {
+  if (effectiveRole === 'Robber') {
     return (
       <RobberAction
         gameId={gameId}
@@ -60,7 +68,7 @@ export default function RoleActionHandler({
       />
     )
   }
-  if (role === 'Troublemaker') {
+  if (effectiveRole === 'Troublemaker') {
     return (
       <TroublemakerAction
         gameId={gameId}
@@ -70,7 +78,7 @@ export default function RoleActionHandler({
       />
     )
   }
-  if (role === 'Drunk') {
+  if (effectiveRole === 'Drunk') {
     return (
       <DrunkAction
         gameId={gameId}
@@ -80,7 +88,7 @@ export default function RoleActionHandler({
       />
     )
   }
-  if (role === 'Insomniac') {
+  if (effectiveRole === 'Insomniac') {
     return (
       <InsomniacAction
         gameId={gameId}
@@ -90,7 +98,7 @@ export default function RoleActionHandler({
       />
     )
   }
-  if (role === 'Minion') {
+  if (effectiveRole === 'Minion') {
     return (
       <MinionAction
         gameId={gameId}
@@ -100,7 +108,7 @@ export default function RoleActionHandler({
       />
     )
   }
-  if (role === 'Mason') {
+  if (effectiveRole === 'Mason') {
     return (
       <MasonAction
         gameId={gameId}
@@ -115,10 +123,10 @@ export default function RoleActionHandler({
   return (
     <div style={{ color: '#ffffff', textAlign: 'center', padding: '2rem' }}>
       <div style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>
-        {role} Action
+        {effectiveRole} Action
       </div>
       <div style={{ color: '#a8b2d1' }}>
-        Action for {role} will be implemented in a future step.
+        Action for {effectiveRole} will be implemented in a future step.
       </div>
     </div>
   )
