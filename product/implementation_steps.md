@@ -2,7 +2,7 @@
 
 ## 🎯 CURRENT STATUS (Updated: 2026-02-21)
 
-**Progress:** Step 8 Complete (40% of 20 steps)
+**Progress:** Night phase roles complete through Insomniac (Steps 9–10 + Minion/Mason); ~55% of 20 steps
 
 ### ✅ Completed Steps:
 - Step 1: Project Setup & Basic Infrastructure
@@ -14,12 +14,15 @@
 - Step 6: Night Phase - Werewolf Role
 - Step 7: Night Phase - Seer Role
 - Step 8: Night Phase - Robber Role
+- Step 9: Night Phase - Troublemaker & Drunk
+- Step 10: Night Phase - Insomniac
+- Night Phase - Minion & Mason (info + acknowledge; same pattern as Werewolf)
 
-### 🚀 Next Steps: Step 9 - Night Phase - Troublemaker & Drunk
+### 🚀 Next Steps: Step 11 - Day Discussion Phase
 
 **Current State:**
-- Robber fully implemented (backend service, API, frontend RobberAction, tests)
-- Night phase: Werewolf → Seer → Robber working; Troublemaker and Drunk still placeholders
+- All night roles implemented (except Doppelgänger): Werewolf, Minion, Mason, Seer, Robber, Troublemaker, Drunk, Insomniac
+- GET night-info and POST acknowledge dispatch by role; action endpoints per role
 
 ---
 - **Step 2**: Game Set Creation (Lobby Start) ✅

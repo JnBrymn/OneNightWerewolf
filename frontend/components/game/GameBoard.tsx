@@ -161,12 +161,13 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
         const isPlayerTurn = game.current_role_step && 
                             playerRole?.current_role && 
                             game.current_role_step === playerRole.current_role
-        
-        if (isPlayerTurn && !showRoleReveal) {
-          // Always show overlay when it's the player's turn
-          // For werewolf, we'll check completion status separately via nightInfo
+        const isNightInfoRole = playerRole?.current_role && nightInfoRoles.includes(playerRole.current_role)
+        const nightActionDone = isNightInfoRole && nightInfo?.night_action_completed
+
+        if (isPlayerTurn && !showRoleReveal && !nightActionDone) {
+          // Show overlay when it's the player's turn and (for info roles) they haven't acked yet
           setShowActionOverlay(true)
-          setActionInProgress(true) // Mark that action is in progress
+          setActionInProgress(true)
         } else if (!actionInProgress) {
           // Only close overlay if action is not in progress
           // This prevents auto-closing when action completes but user hasn't clicked OK yet
@@ -181,7 +182,7 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
     // Poll every 1 second to catch simulated role completions quickly
     const interval = setInterval(fetchAvailableActions, 1000)
     return () => clearInterval(interval)
-  }, [gameId, currentPlayerId, game?.state, game?.current_role_step, playerRole?.current_role, showRoleReveal, actionInProgress])
+  }, [gameId, currentPlayerId, game?.state, game?.current_role_step, playerRole?.current_role, showRoleReveal, actionInProgress, nightInfo?.night_action_completed])
 
   // Fetch accrued actions
   useEffect(() => {
@@ -203,14 +204,15 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
     return () => clearInterval(interval)
   }, [gameId, currentPlayerId])
 
-  // Fetch night info for werewolf (and refresh when action completes)
+  // Fetch night info for roles that need it (Werewolf, Minion, Mason, Insomniac)
+  const nightInfoRoles = ['Werewolf', 'Minion', 'Mason', 'Insomniac']
   useEffect(() => {
     if (!gameId || !currentPlayerId || !game || game.state !== 'NIGHT') {
       setNightInfo(null)
       return
     }
-
-    if (game.current_role_step !== 'Werewolf' || playerRole?.current_role !== 'Werewolf') {
+    const isNightInfoRole = playerRole?.current_role && nightInfoRoles.includes(playerRole.current_role)
+    if (game.current_role_step !== playerRole?.current_role || !isNightInfoRole) {
       setNightInfo(null)
       return
     }
@@ -227,7 +229,6 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
     }
 
     fetchNightInfo()
-    // Poll more frequently when it's werewolf's turn to catch completion status
     const interval = setInterval(fetchNightInfo, 1000)
     return () => clearInterval(interval)
   }, [gameId, currentPlayerId, game?.state, game?.current_role_step, playerRole?.current_role])
@@ -238,23 +239,15 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
   }
 
   function handleActionComplete() {
-    // Mark action as no longer in progress
     setActionInProgress(false)
-    
-    // Refresh nightInfo to get updated completion status
-    if (playerRole?.current_role === 'Werewolf') {
-      fetch(`/api/games/${gameId}/players/${currentPlayerId}/night-info`)
-        .then(r => r.json())
-        .then(data => {
-          setNightInfo(data)
-        })
-        .catch(console.error)
-    }
-    
-    // Close the overlay after user clicks OK
     setShowActionOverlay(false)
-    
-    // Refresh available actions to update state
+
+    // Mark night-info role as completed locally so the overlay stays closed
+    // (polling may still show NIGHT + this role until game state refreshes)
+    if (nightInfoRoles.includes(playerRole?.current_role ?? '')) {
+      setNightInfo((prev: any) => (prev ? { ...prev, night_action_completed: true } : null))
+    }
+
     setTimeout(() => {
       fetch(`/api/games/${gameId}/players/${currentPlayerId}/available-actions`)
         .then(r => r.json())
@@ -403,18 +396,11 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
         <ActionOverlay
           isOpen={showActionOverlay}
           onClose={() => {
-            // Only allow closing if action is completed (for werewolf) or always for other roles
-            // The OK button in the action components will call handleActionComplete which closes the overlay
-            if (playerRole?.current_role === 'Werewolf') {
-              if (nightInfo?.night_action_completed) {
-                setShowActionOverlay(false)
-              }
-            } else {
-              // For other roles, allow closing (they handle OK button themselves)
-              setShowActionOverlay(false)
-            }
+            const infoRole = playerRole?.current_role && nightInfoRoles.includes(playerRole.current_role)
+            if (infoRole && nightInfo?.night_action_completed) setShowActionOverlay(false)
+            else if (!infoRole) setShowActionOverlay(false)
           }}
-          canClose={playerRole?.current_role === 'Werewolf' ? (nightInfo?.night_action_completed ?? false) : true}
+          canClose={nightInfoRoles.includes(playerRole?.current_role ?? '') ? (nightInfo?.night_action_completed ?? false) : true}
           showOkButton={false}
         >
           <RoleActionHandler

@@ -1,4 +1,5 @@
 """Tests for action service endpoints."""
+import uuid
 import pytest
 from fastapi.testclient import TestClient
 from db.database import SessionLocal
@@ -25,9 +26,12 @@ def db():
 @pytest.fixture
 def game_setup(db):
     """Create a game set with players and a game."""
+    uid = str(uuid.uuid4())[:8]
+    game_set_id = f"test-game-set-{uid}"
+    game_id = f"test-game-{uid}"
     # Create game set
     game_set = GameSet(
-        game_set_id="test-game-set-1",
+        game_set_id=game_set_id,
         num_players=5,
         selected_roles=["Werewolf", "Werewolf", "Villager", "Villager", "Villager", "Seer", "Robber", "Troublemaker"],
         discussion_timer_seconds=300
@@ -39,7 +43,7 @@ def game_setup(db):
     players = []
     for i in range(5):
         player = Player(
-            player_id=f"player-{i}",
+            player_id=f"player-{uid}-{i}",
             player_name=f"Player {i}"
         )
         players.append(player)
@@ -48,7 +52,7 @@ def game_setup(db):
 
     # Create game
     game = Game(
-        game_id="test-game-1",
+        game_id=game_id,
         game_set_id=game_set.game_set_id,
         game_number=1,
         state=GameState.NIGHT,
@@ -111,9 +115,10 @@ def test_get_available_actions_for_werewolf(db, game_setup):
 def test_get_available_actions_for_seer(db, game_setup):
     """Test that seer gets correct actionable items."""
     game = game_setup["game"]
-    # Add a Seer player role
+    # Add a Seer player role (unique id to avoid collision across test runs)
+    seer_player_id = f"seer-player-{game.game_id}"
     seer_player = Player(
-        player_id="seer-player",
+        player_id=seer_player_id,
         player_name="Seer Player"
     )
     db.add(seer_player)

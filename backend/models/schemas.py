@@ -116,3 +116,14 @@ class SeerActionRequest(BaseModel):
         if action_type == 'view_player' and not v:
             raise ValueError("target_player_id is required when action_type is 'view_player'")
         return v
+
+
+class TroublemakerActionRequest(BaseModel):
+    """Schema for Troublemaker action: swap two other players' cards."""
+    player1_id: str = Field(..., min_length=1, description="First player ID")
+    player2_id: str = Field(..., min_length=1, description="Second player ID")
+
+
+class DrunkActionRequest(BaseModel):
+    """Schema for Drunk action: swap with a center card (no looking)."""
+    card_index: int = Field(..., ge=0, le=2, description="Center card index (0-2)")

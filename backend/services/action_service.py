@@ -171,15 +171,27 @@ def get_player_actions(db: Session, game_id: str, player_id: str) -> dict:
 
     for action in db_actions:
         if action.action_type == ActionType.VIEW_CARD:
-            if action.target_id.startswith(("0", "1", "2")):
+            if action.target_id in ("0", "1", "2"):
                 # Viewed center card
                 card_label = ["Left", "Center", "Right"][int(action.target_id)]
                 actions.append({
                     "action_type": "VIEW_CARD",
                     "description": f"You viewed center card {card_label}. The card is: {action.target_role}"
                 })
+            elif action.target_id == "center":
+                # Mason: other Mason is in center
+                actions.append({
+                    "action_type": "VIEW_CARD",
+                    "description": "The other Mason is in the center."
+                })
+            elif action.source_id == action.target_id == player_id:
+                # Insomniac: viewed own card
+                actions.append({
+                    "action_type": "VIEW_CARD",
+                    "description": f"Your current role is: {action.target_role}"
+                })
             else:
-                # Viewed player card
+                # Viewed another player's card
                 target_player = db.query(Player).filter(Player.player_id == action.target_id).first()
                 target_name = target_player.player_name if target_player else action.target_id
                 actions.append({
@@ -192,6 +204,15 @@ def get_player_actions(db: Session, game_id: str, player_id: str) -> dict:
             actions.append({
                 "action_type": "SWAP_PLAYER_TO_PLAYER",
                 "description": f"You exchanged cards with {target_name}. You are now: {action.target_role}"
+            })
+        elif action.action_type == ActionType.SWAP_TWO_PLAYERS:
+            p1 = db.query(Player).filter(Player.player_id == action.source_id).first()
+            p2 = db.query(Player).filter(Player.player_id == action.target_id).first()
+            n1 = p1.player_name if p1 else action.source_id
+            n2 = p2.player_name if p2 else action.target_id
+            actions.append({
+                "action_type": "SWAP_TWO_PLAYERS",
+                "description": f"You swapped the cards of {n1} and {n2}."
             })
         elif action.action_type == ActionType.SWAP_PLAYER_TO_CENTER:
             card_label = ["Left", "Center", "Right"][int(action.target_id)]

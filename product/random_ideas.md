@@ -1,0 +1,2 @@
+- Consider using Rodney and Showboat to demo the changes that have been made at each step https://simonwillison.net/2026/Feb/10/showboat-and-rodney/?utm_source=substack&utm_medium=email
+- Try atelier for task management 

@@ -10,6 +10,7 @@ class ActionType(str, enum.Enum):
     """Enum for action types."""
     SWAP_PLAYER_TO_PLAYER = "SWAP_PLAYER_TO_PLAYER"
     SWAP_PLAYER_TO_CENTER = "SWAP_PLAYER_TO_CENTER"
+    SWAP_TWO_PLAYERS = "SWAP_TWO_PLAYERS"  # Troublemaker swaps two other players
     VIEW_CARD = "VIEW_CARD"
 
 

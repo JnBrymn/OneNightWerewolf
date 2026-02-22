@@ -92,6 +92,7 @@ def test_lone_wolf_can_view_center(monkeypatch):
 
 
 def test_werewolf_acknowledge_completes_role(monkeypatch):
+    """When all werewolves acknowledge, night advances to the next role (Seer is in this game)."""
     def no_shuffle(items):
         return None
 
@@ -110,4 +111,5 @@ def test_werewolf_acknowledge_completes_role(monkeypatch):
         assert response.status_code == 200
 
     status = client.get(f"/api/games/{game_id}/night-status").json()
-    assert status["current_role"] is None
+    assert "Werewolf" in status["roles_completed"]
+    assert status["current_role"] == "Seer"
