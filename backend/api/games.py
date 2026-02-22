@@ -39,8 +39,14 @@ def get_game(game_id: str, db: Session = Depends(get_db)):
     if game.state == GameState.NIGHT:
         night_service.check_and_advance_simulated_role(db, game_id)
         db.refresh(game)
-    
-    return game.to_dict()
+
+    out = game.to_dict()
+    # All players have acknowledged their role reveal when every player_role has role_revealed=True
+    player_roles = db.query(PlayerRole).filter(PlayerRole.game_id == game_id).all()
+    out["all_players_acknowledged_roles"] = (
+        len(player_roles) > 0 and all(getattr(pr, "role_revealed", False) for pr in player_roles)
+    )
+    return out
 
 
 @router.get("/{game_id}/players/{player_id}/role")
@@ -51,6 +57,22 @@ def get_player_role(game_id: str, player_id: str, db: Session = Depends(get_db))
         return player_role.to_dict()
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{game_id}/players/{player_id}/acknowledge-role")
+def acknowledge_role(game_id: str, player_id: str, db: Session = Depends(get_db)):
+    """Mark that this player has seen and acknowledged their initial role."""
+    game = db.query(Game).filter(Game.game_id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    try:
+        player_role = game_service.get_player_role(db, game_id, player_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    player_role.role_revealed = True
+    db.commit()
+    db.refresh(player_role)
+    return {"status": "ok", "role_revealed": True}
 
 
 @router.get("/{game_id}/night-status")

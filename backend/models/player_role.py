@@ -16,6 +16,7 @@ class PlayerRole(Base):
     team = Column(String, nullable=True)  # village, werewolf, tanner
     was_killed = Column(Boolean, default=False)  # Died during voting
     night_action_completed = Column(Boolean, default=False)  # Action/acknowledgment done for night role
+    role_revealed = Column(Boolean, default=False)  # Player has acknowledged seeing their initial role
 
     # Relationships
     game = relationship("Game", back_populates="player_roles")
@@ -32,4 +33,5 @@ class PlayerRole(Base):
             "team": self.team,
             "was_killed": self.was_killed,
             "night_action_completed": self.night_action_completed,
+            "role_revealed": getattr(self, "role_revealed", False),
         }

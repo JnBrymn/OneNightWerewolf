@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./onw.db"
@@ -24,3 +24,13 @@ def get_db():
 def init_db():
     """Initialize database tables."""
     Base.metadata.create_all(bind=engine)
+    # Add role_revealed to player_roles if missing (e.g. existing DBs)
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT 1 FROM pragma_table_info('player_roles') WHERE name='role_revealed'"
+        ))
+        if result.scalar() is None:
+            conn.execute(text(
+                "ALTER TABLE player_roles ADD COLUMN role_revealed BOOLEAN DEFAULT 0"
+            ))
+            conn.commit()

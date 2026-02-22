@@ -7,12 +7,14 @@ import PhaseIndicator from './PhaseIndicator'
 import ActionOverlay from './ActionOverlay'
 import RoleActionHandler from './actions/RoleActionHandler'
 import RoleReveal from './RoleReveal'
+import WaitingForPlayers from './WaitingForPlayers'
 
 interface Game {
   game_id: string
   game_set_id: string
   state: string | null
   current_role_step: string | null
+  all_players_acknowledged_roles?: boolean
 }
 
 interface PlayerRole {
@@ -61,6 +63,7 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
   const [accruedActions, setAccruedActions] = useState<Action[]>([])
   const [nightInfo, setNightInfo] = useState<any>(null)
   const [showRoleReveal, setShowRoleReveal] = useState(true)
+  const [showWaitingForPlayers, setShowWaitingForPlayers] = useState(false)
   const [showActionOverlay, setShowActionOverlay] = useState(false)
   const [actionInProgress, setActionInProgress] = useState(false) // Track if user is in middle of action
   const [loading, setLoading] = useState(true)
@@ -76,6 +79,10 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
         if (!response.ok) throw new Error('Failed to fetch game')
         const data = await response.json()
         setGame(data)
+
+        if (data.all_players_acknowledged_roles) {
+          setShowWaitingForPlayers(false)
+        }
         
         // If game is in NIGHT state but current_role_step is null, initialize night phase
         if (data.state === 'NIGHT' && !data.current_role_step) {
@@ -117,6 +124,14 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
 
     fetchPlayerRole()
   }, [gameId, currentPlayerId])
+
+  // If player already acknowledged role but not everyone has, show waiting screen (e.g. after refresh)
+  useEffect(() => {
+    if (!game || !playerRole || showRoleReveal) return
+    if (playerRole.role_revealed && game.all_players_acknowledged_roles === false) {
+      setShowWaitingForPlayers(true)
+    }
+  }, [game, playerRole, showRoleReveal])
 
   // Fetch players
   useEffect(() => {
@@ -233,9 +248,18 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
     return () => clearInterval(interval)
   }, [gameId, currentPlayerId, game?.state, game?.current_role_step, playerRole?.current_role])
 
-  function handleRoleAcknowledge() {
-    setShowRoleReveal(false)
-    // Note: role_revealed is tracked in component state, backend doesn't need it for now
+  async function handleRoleAcknowledge() {
+    try {
+      const response = await fetch(
+        `/api/games/${gameId}/players/${currentPlayerId}/acknowledge-role`,
+        { method: 'POST' }
+      )
+      if (!response.ok) throw new Error('Failed to acknowledge role')
+      setShowRoleReveal(false)
+      setShowWaitingForPlayers(true)
+    } catch (err: any) {
+      setError(err?.message ?? 'Something went wrong')
+    }
   }
 
   function handleActionComplete() {
@@ -316,6 +340,13 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
         teamColor={teamColor}
         onAcknowledge={handleRoleAcknowledge}
       />
+    )
+  }
+
+  // Waiting for all players to acknowledge their roles before night begins
+  if (showWaitingForPlayers) {
+    return (
+      <WaitingForPlayers teamColor={teamColor} />
     )
   }
 
