@@ -130,18 +130,15 @@ def test_drunk_swaps_with_center(monkeypatch):
         f"/api/games/{game_id}/players/{troublemaker_id}/troublemaker-action",
         json={"player1_id": werewolf_id, "player2_id": drunk_id}
     )
-    # After Troublemaker swap, the player who now has the Drunk role performs drunk action
-    role_map_after_tm = _get_roles(game_id, player_ids)
-    current_drunk_id = [pid for pid, r in role_map_after_tm.items() if r == "Drunk"][0]
-
+    # Only the player whose initial role was Drunk acts during Drunk step (they may have a different card now)
     response = client.post(
-        f"/api/games/{game_id}/players/{current_drunk_id}/drunk-action",
+        f"/api/games/{game_id}/players/{drunk_id}/drunk-action",
         json={"card_index": 0}
     )
     assert response.status_code == 200
     assert "don't know your new role" in response.json().get("message", "")
 
-    role_after = client.get(f"/api/games/{game_id}/players/{current_drunk_id}/role").json()
+    role_after = client.get(f"/api/games/{game_id}/players/{drunk_id}/role").json()
     assert role_after["current_role"] == "Villager"
 
 
@@ -164,10 +161,9 @@ def test_drunk_advances_night_to_insomniac_or_day(monkeypatch):
         f"/api/games/{game_id}/players/{troublemaker_id}/troublemaker-action",
         json={"player1_id": werewolf_id, "player2_id": drunk_id}
     )
-    role_map_after_tm = _get_roles(game_id, player_ids)
-    current_drunk_id = [pid for pid, r in role_map_after_tm.items() if r == "Drunk"][0]
+    # Only the original Drunk acts during Drunk step
     client.post(
-        f"/api/games/{game_id}/players/{current_drunk_id}/drunk-action",
+        f"/api/games/{game_id}/players/{drunk_id}/drunk-action",
         json={"card_index": 0}
     )
 

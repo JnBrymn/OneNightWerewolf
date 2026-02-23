@@ -1,8 +1,8 @@
 # One Night Werewolf - Implementation Steps
 
-## 🎯 CURRENT STATUS (Updated: 2026-02-21)
+## 🎯 CURRENT STATUS (Updated: 2026-02-22)
 
-**Progress:** Night phase roles complete through Insomniac (Steps 9–10 + Minion/Mason); ~55% of 20 steps
+**Progress:** Day discussion, voting, and results complete (Steps 11–13); ~65% of 20 steps
 
 ### ✅ Completed Steps:
 - Step 1: Project Setup & Basic Infrastructure
@@ -17,12 +17,15 @@
 - Step 9: Night Phase - Troublemaker & Drunk
 - Step 10: Night Phase - Insomniac
 - Night Phase - Minion & Mason (info + acknowledge; same pattern as Werewolf)
+- Step 11: Day Discussion Phase (timer, discussion-status, auto → DAY_VOTING)
+- Step 12: Voting Phase (POST vote, GET votes, auto → RESULTS)
+- Step 13: Results & Win Conditions (deaths, Hunter, village/werewolf/tanner/minion wins, ResultsDisplay)
 
-### 🚀 Next Steps: Step 11 - Day Discussion Phase
+### 🚀 Next Steps: Step 14 - Multi-Game Support & Scoring
 
 **Current State:**
-- All night roles implemented (except Doppelgänger): Werewolf, Minion, Mason, Seer, Robber, Troublemaker, Drunk, Insomniac
-- GET night-info and POST acknowledge dispatch by role; action endpoints per role
+- Full game loop: NIGHT → DAY_DISCUSSION → DAY_VOTING → RESULTS
+- "Play Another Game" / "End Game Set" on results screen are placeholders (not wired)
 
 ---
 - **Step 2**: Game Set Creation (Lobby Start) ✅
@@ -92,6 +95,7 @@ This document breaks down the implementation into demonstrable milestones. Each 
 - **Tools**: pytest, FastAPI TestClient
 - **Focus**: HTTP responses, validation, database state
 - **Example**: Test that POST /api/players creates a player
+- **Full-night integration**: `test_full_night_integration.py` runs a full night (Werewolf → Seer → Robber → Troublemaker → Drunk → Insomniac) via API and asserts each player’s final `current_role` and `actions` so state is correct from every player’s perspective.
 
 ### Frontend Testing (Jest + React Testing Library)
 - **What to test**: User interactions, navigation, form validation, API integration

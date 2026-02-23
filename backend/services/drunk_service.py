@@ -42,8 +42,8 @@ def perform_drunk_action(
         raise ValueError("Drunk role is not currently active")
 
     drunk_role = _get_player_role(db, game_id, player_id)
-    if drunk_role.current_role != "Drunk":
-        raise ValueError("Player is not the Drunk")
+    if drunk_role.initial_role != "Drunk":
+        raise ValueError("Player is not the Drunk (only original Drunk acts)")
 
     if drunk_role.night_action_completed:
         raise ValueError("Drunk has already performed their action")
@@ -100,7 +100,7 @@ def _complete_drunk_role_if_ready(db: Session, game_id: str) -> None:
         return
     roles = db.query(PlayerRole).filter(
         PlayerRole.game_id == game_id,
-        PlayerRole.current_role == "Drunk"
+        PlayerRole.initial_role == "Drunk"
     ).all()
     if roles and all(r.night_action_completed for r in roles):
         night_service.mark_role_complete(db, game_id, "Drunk")

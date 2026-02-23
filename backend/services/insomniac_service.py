@@ -18,8 +18,8 @@ def get_night_info(db: Session, game_id: str, player_id: str) -> dict:
         db.refresh(game)
 
     player_role = _get_player_role(db, game_id, player_id)
-    if player_role.current_role != "Insomniac":
-        raise ValueError("Player is not the Insomniac")
+    if player_role.initial_role != "Insomniac":
+        raise ValueError("Player is not the Insomniac (only original Insomniac acts)")
     if game.current_role_step != "Insomniac":
         raise ValueError("Insomniac role is not currently active")
 
@@ -44,8 +44,8 @@ def acknowledge_insomniac(db: Session, game_id: str, player_id: str) -> dict:
         raise ValueError("Insomniac role is not currently active")
 
     player_role = _get_player_role(db, game_id, player_id)
-    if player_role.current_role != "Insomniac":
-        raise ValueError("Player is not the Insomniac")
+    if player_role.initial_role != "Insomniac":
+        raise ValueError("Player is not the Insomniac (only original Insomniac acts)")
 
     if not player_role.night_action_completed:
         action = Action(
@@ -81,7 +81,7 @@ def _complete_insomniac_role_if_ready(db: Session, game_id: str) -> None:
         return
     roles = db.query(PlayerRole).filter(
         PlayerRole.game_id == game_id,
-        PlayerRole.current_role == "Insomniac"
+        PlayerRole.initial_role == "Insomniac"
     ).all()
     if roles and all(r.night_action_completed for r in roles):
         night_service.mark_role_complete(db, game_id, "Insomniac")

@@ -25,6 +25,7 @@ class Game(Base):
     current_role_step = Column(String, nullable=True)  # Which role is active in night phase
     active_roles = Column(JSON, nullable=True)  # Ordered list of active roles (roles with wake_order) present in this game, ordered by wake_order
     simulated_role_started_at = Column(DateTime(timezone=True), nullable=True)  # When a simulated (center card) role started acting
+    discussion_started_at = Column(DateTime(timezone=True), nullable=True)  # When day discussion phase started (for timer)
     simulated_role_duration_seconds = Column(Integer, nullable=True)  # Random duration for simulated role (15-40 seconds)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -46,6 +47,7 @@ class Game(Base):
             "active_roles": self.active_roles,
             "simulated_role_started_at": self.simulated_role_started_at.isoformat() if self.simulated_role_started_at else None,
             "simulated_role_duration_seconds": self.simulated_role_duration_seconds,
+            "discussion_started_at": self.discussion_started_at.isoformat() if self.discussion_started_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "ended_at": self.ended_at.isoformat() if self.ended_at else None,

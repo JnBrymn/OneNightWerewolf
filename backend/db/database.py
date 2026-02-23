@@ -34,3 +34,13 @@ def init_db():
                 "ALTER TABLE player_roles ADD COLUMN role_revealed BOOLEAN DEFAULT 0"
             ))
             conn.commit()
+    # Add discussion_started_at to games if missing
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT 1 FROM pragma_table_info('games') WHERE name='discussion_started_at'"
+        ))
+        if result.scalar() is None:
+            conn.execute(text(
+                "ALTER TABLE games ADD COLUMN discussion_started_at DATETIME"
+            ))
+            conn.commit()

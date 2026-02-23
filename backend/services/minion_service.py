@@ -54,8 +54,8 @@ def acknowledge_minion(db: Session, game_id: str, player_id: str) -> dict:
         raise ValueError("Minion role is not currently active")
 
     player_role = _get_player_role(db, game_id, player_id)
-    if player_role.current_role != "Minion":
-        raise ValueError("Player is not the Minion")
+    if player_role.initial_role != "Minion":
+        raise ValueError("Player is not the Minion (only original Minion acts)")
 
     if not player_role.night_action_completed:
         werewolves = db.query(PlayerRole).filter(
@@ -96,7 +96,7 @@ def _complete_minion_role_if_ready(db: Session, game_id: str) -> None:
         return
     roles = db.query(PlayerRole).filter(
         PlayerRole.game_id == game_id,
-        PlayerRole.current_role == "Minion"
+        PlayerRole.initial_role == "Minion"
     ).all()
     if roles and all(r.night_action_completed for r in roles):
         night_service.mark_role_complete(db, game_id, "Minion")

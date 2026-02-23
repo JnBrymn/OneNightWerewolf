@@ -42,8 +42,8 @@ def perform_robber_action(
         raise ValueError("Robber role is not currently active")
 
     robber_role = _get_player_role(db, game_id, player_id)
-    if robber_role.current_role != "Robber":
-        raise ValueError("Player is not a Robber")
+    if robber_role.initial_role != "Robber":
+        raise ValueError("Player is not a Robber (only original Robber acts)")
 
     if robber_role.night_action_completed:
         raise ValueError("Robber has already performed their action")
@@ -54,10 +54,10 @@ def perform_robber_action(
     target_role = _get_player_role(db, game_id, target_player_id)
     new_role = target_role.current_role
 
-    # Collect all Robbers before swap (so we can check completion after; after swap our current_role changes)
+    # Collect all original Robbers (by initial_role) before swap so we can check completion
     robbers_in_game = db.query(PlayerRole).filter(
         PlayerRole.game_id == game_id,
-        PlayerRole.current_role == "Robber"
+        PlayerRole.initial_role == "Robber"
     ).all()
 
     # Swap current_role between Robber and target

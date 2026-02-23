@@ -11,6 +11,7 @@ from models.schemas import (
     RobberActionRequest,
     TroublemakerActionRequest,
     DrunkActionRequest,
+    VoteRequest,
 )
 from services import (
     game_service,
@@ -24,6 +25,9 @@ from services import (
     minion_service,
     mason_service,
     insomniac_service,
+    discussion_service,
+    voting_service,
+    results_service,
 )
 
 router = APIRouter(prefix="/api/games", tags=["games"])
@@ -38,6 +42,10 @@ def get_game(game_id: str, db: Session = Depends(get_db)):
     # Check and advance simulated roles if needed (when in NIGHT state)
     if game.state == GameState.NIGHT:
         night_service.check_and_advance_simulated_role(db, game_id)
+        db.refresh(game)
+    # Check discussion timer and maybe transition to DAY_VOTING
+    if game.state == GameState.DAY_DISCUSSION:
+        discussion_service.check_discussion_timer_and_maybe_transition(db, game_id)
         db.refresh(game)
 
     out = game.to_dict()
@@ -73,6 +81,28 @@ def acknowledge_role(game_id: str, player_id: str, db: Session = Depends(get_db)
     db.commit()
     db.refresh(player_role)
     return {"status": "ok", "role_revealed": True}
+
+
+@router.get("/{game_id}/discussion-status")
+def get_discussion_status(
+    game_id: str,
+    player_id: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Get discussion phase timer status. Include vote-now counts when player_id query param provided."""
+    try:
+        return discussion_service.get_discussion_status(db, game_id, player_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{game_id}/players/{player_id}/vote-now")
+def post_vote_now(game_id: str, player_id: str, db: Session = Depends(get_db)):
+    """Record that this player wants to start voting now. Majority transitions to DAY_VOTING."""
+    try:
+        return discussion_service.record_vote_now(db, game_id, player_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/{game_id}/night-status")
@@ -118,20 +148,29 @@ def _get_player_current_role(db: Session, game_id: str, player_id: str) -> str |
 
 @router.get("/{game_id}/players/{player_id}/night-info")
 def get_night_info(game_id: str, player_id: str, db: Session = Depends(get_db)):
-    """Get role-specific night info for a player (Werewolf, Minion, Mason, Insomniac)."""
-    role = _get_player_current_role(db, game_id, player_id)
-    if not role:
+    """Get role-specific night info. Only returns info when it's this role's step and player's *initial* role matches (so only the original role-holder acts)."""
+    game = db.query(Game).filter(Game.game_id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    pr = db.query(PlayerRole).filter(
+        PlayerRole.game_id == game_id,
+        PlayerRole.player_id == player_id
+    ).first()
+    if not pr:
         raise HTTPException(status_code=404, detail="Player not found in game")
+    step = game.current_role_step
+    if not step or step != pr.initial_role:
+        raise HTTPException(status_code=400, detail="Night info only available when it is your role's turn")
     try:
-        if role == "Werewolf":
+        if step == "Werewolf":
             return werewolf_service.get_night_info(db, game_id, player_id)
-        if role == "Minion":
+        if step == "Minion":
             return minion_service.get_night_info(db, game_id, player_id)
-        if role == "Mason":
+        if step == "Mason":
             return mason_service.get_night_info(db, game_id, player_id)
-        if role == "Insomniac":
+        if step == "Insomniac":
             return insomniac_service.get_night_info(db, game_id, player_id)
-        raise HTTPException(status_code=400, detail=f"Night info not available for role {role}")
+        raise HTTPException(status_code=400, detail=f"Night info not available for role {step}")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -243,6 +282,40 @@ def perform_troublemaker_action(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{game_id}/players/{player_id}/vote")
+def cast_vote(
+    game_id: str,
+    player_id: str,
+    payload: VoteRequest,
+    db: Session = Depends(get_db)
+):
+    """Cast a vote for who to kill. X-Player-ID header must match player_id."""
+    try:
+        return voting_service.cast_vote(
+            db, game_id, player_id, payload.target_player_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{game_id}/votes")
+def get_votes(game_id: str, db: Session = Depends(get_db)):
+    """Get vote status (who voted, count, total players)."""
+    try:
+        return voting_service.get_votes(db, game_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/{game_id}/results")
+def get_results(game_id: str, db: Session = Depends(get_db)):
+    """Get game results (deaths, winning team, per-player outcome)."""
+    try:
+        return results_service.get_results(db, game_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post("/{game_id}/players/{player_id}/drunk-action")

@@ -34,8 +34,9 @@ export default function RoleActionHandler({
   availableActions,
   onActionComplete
 }: RoleActionHandlerProps) {
-  // Use current step for night-info roles so we always show the right action (e.g. Insomniac)
-  const effectiveRole = currentRoleStep && NIGHT_INFO_ROLES.includes(currentRoleStep)
+  // Use current step for night-info roles only when it's this player's turn, so we don't show
+  // e.g. Insomniac UI to the Troublemaker when the step moved to Insomniac (bug 6).
+  const effectiveRole = (currentRoleStep && role === currentRoleStep && NIGHT_INFO_ROLES.includes(currentRoleStep))
     ? currentRoleStep
     : role
   if (effectiveRole === 'Werewolf') {

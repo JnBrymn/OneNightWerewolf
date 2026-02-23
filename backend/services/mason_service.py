@@ -66,8 +66,8 @@ def acknowledge_mason(db: Session, game_id: str, player_id: str) -> dict:
         raise ValueError("Mason role is not currently active")
 
     player_role = _get_player_role(db, game_id, player_id)
-    if player_role.current_role != "Mason":
-        raise ValueError("Player is not a Mason")
+    if player_role.initial_role != "Mason":
+        raise ValueError("Player is not a Mason (only original Mason acts)")
 
     if not player_role.night_action_completed:
         other_masons = db.query(PlayerRole).filter(
@@ -128,7 +128,7 @@ def _complete_mason_role_if_ready(db: Session, game_id: str) -> None:
         return
     roles = db.query(PlayerRole).filter(
         PlayerRole.game_id == game_id,
-        PlayerRole.current_role == "Mason"
+        PlayerRole.initial_role == "Mason"
     ).all()
     if roles and all(r.night_action_completed for r in roles):
         night_service.mark_role_complete(db, game_id, "Mason")

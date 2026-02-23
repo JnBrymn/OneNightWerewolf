@@ -21,10 +21,10 @@ NIGHT_WAKE_ORDER = [
 
 
 def _is_role_assigned_to_player(db: Session, game_id: str, role: str) -> bool:
-    """Check if a role is assigned to any player (vs being in center cards)."""
+    """Check if a role is assigned to any player (vs being in center cards). Uses initial_role so e.g. Insomniac is still 'assigned' even if that player was swapped."""
     player_role = db.query(PlayerRole).filter(
         PlayerRole.game_id == game_id,
-        PlayerRole.current_role == role
+        PlayerRole.initial_role == role
     ).first()
     return player_role is not None
 
@@ -226,6 +226,7 @@ def mark_role_complete(db: Session, game_id: str, role: str) -> dict:
         # Night phase is over, transition to day
         game.current_role_step = None
         game.state = GameState.DAY_DISCUSSION
+        game.discussion_started_at = datetime.utcnow()
         db.commit()
         db.refresh(game)
 

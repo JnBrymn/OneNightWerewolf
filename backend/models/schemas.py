@@ -25,7 +25,7 @@ class GameSetCreate(BaseModel):
     """Schema for creating a new game set."""
     num_players: int = Field(..., ge=3, le=10, description="Number of players (3-10)")
     selected_roles: List[str] = Field(..., min_length=1, description="List of role names")
-    discussion_timer_seconds: int = Field(default=300, ge=60, le=600, description="Discussion time limit in seconds")
+    discussion_timer_seconds: int = Field(default=300, ge=5, le=600, description="Discussion time limit in seconds")
     created_by: Optional[str] = Field(None, description="Creator user/session ID")
 
     @field_validator('selected_roles')
@@ -127,3 +127,8 @@ class TroublemakerActionRequest(BaseModel):
 class DrunkActionRequest(BaseModel):
     """Schema for Drunk action: swap with a center card (no looking)."""
     card_index: int = Field(..., ge=0, le=2, description="Center card index (0-2)")
+
+
+class VoteRequest(BaseModel):
+    """Schema for casting a vote (who to kill)."""
+    target_player_id: str = Field(..., min_length=1, description="Player ID to vote for (kill)")

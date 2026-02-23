@@ -8,6 +8,8 @@ import ActionOverlay from './ActionOverlay'
 import RoleActionHandler from './actions/RoleActionHandler'
 import RoleReveal from './RoleReveal'
 import WaitingForPlayers from './WaitingForPlayers'
+import TimerDisplay from './TimerDisplay'
+import ResultsDisplay from './ResultsDisplay'
 
 interface Game {
   game_id: string
@@ -68,6 +70,22 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
   const [actionInProgress, setActionInProgress] = useState(false) // Track if user is in middle of action
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [discussionStatus, setDiscussionStatus] = useState<{
+    time_remaining_seconds: number
+    state: string
+    vote_now_count?: number
+    total_players?: number
+    vote_now_majority?: number
+    current_player_voted_now?: boolean
+  } | null>(null)
+  const [votes, setVotes] = useState<{ votes_cast: number; total_players: number } | null>(null)
+  const [results, setResults] = useState<{
+    deaths: string[]
+    winning_team: string
+    players: { player_id: string; player_name: string; initial_role: string; current_role: string; team: string; died: boolean; won: boolean }[]
+    vote_summary: { [playerId: string]: number }
+  } | null>(null)
+  const [votedFor, setVotedFor] = useState<string | null>(null)
 
   // Fetch game state
   useEffect(() => {
@@ -171,12 +189,11 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
         const data = await response.json()
         setAvailableActions(data)
         
-        // Show overlay if it's player's turn (regardless of whether they have actionable items)
-        // Even info-display roles (like multiple werewolves) need the overlay
+        // Show overlay only when it's this player's turn: match by *initial* role so e.g. Robber who stole Insomniac doesn't act at Insomniac step
         const isPlayerTurn = game.current_role_step && 
-                            playerRole?.current_role && 
-                            game.current_role_step === playerRole.current_role
-        const isNightInfoRole = playerRole?.current_role && nightInfoRoles.includes(playerRole.current_role)
+                            playerRole?.initial_role && 
+                            game.current_role_step === playerRole.initial_role
+        const isNightInfoRole = playerRole?.initial_role && nightInfoRoles.includes(playerRole.initial_role)
         const nightActionDone = isNightInfoRole && nightInfo?.night_action_completed
 
         if (isPlayerTurn && !showRoleReveal && !nightActionDone) {
@@ -197,7 +214,7 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
     // Poll every 1 second to catch simulated role completions quickly
     const interval = setInterval(fetchAvailableActions, 1000)
     return () => clearInterval(interval)
-  }, [gameId, currentPlayerId, game?.state, game?.current_role_step, playerRole?.current_role, showRoleReveal, actionInProgress, nightInfo?.night_action_completed])
+  }, [gameId, currentPlayerId, game?.state, game?.current_role_step, playerRole?.initial_role, showRoleReveal, actionInProgress, nightInfo?.night_action_completed])
 
   // Fetch accrued actions
   useEffect(() => {
@@ -219,6 +236,76 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
     return () => clearInterval(interval)
   }, [gameId, currentPlayerId])
 
+  // Fetch discussion timer and vote-now status when in DAY_DISCUSSION
+  useEffect(() => {
+    if (!gameId || !game || game.state !== 'DAY_DISCUSSION') {
+      setDiscussionStatus(null)
+      return
+    }
+    async function fetchDiscussion() {
+      try {
+        const url = currentPlayerId
+          ? `/api/games/${gameId}/discussion-status?player_id=${encodeURIComponent(currentPlayerId)}`
+          : `/api/games/${gameId}/discussion-status`
+        const res = await fetch(url)
+        if (res.ok) {
+          const data = await res.json()
+          setDiscussionStatus(data)
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    fetchDiscussion()
+    const interval = setInterval(fetchDiscussion, 1000)
+    return () => clearInterval(interval)
+  }, [gameId, game?.state, currentPlayerId])
+
+  // Fetch votes when in DAY_VOTING
+  useEffect(() => {
+    if (!gameId || !game || game.state !== 'DAY_VOTING') {
+      setVotes(null)
+      setVotedFor(null)
+      return
+    }
+    async function fetchVotes() {
+      try {
+        const res = await fetch(`/api/games/${gameId}/votes`)
+        if (res.ok) {
+          const data = await res.json()
+          setVotes({ votes_cast: data.votes_cast, total_players: data.total_players })
+          const myVote = data.votes?.find((v: { voter_id: string }) => v.voter_id === currentPlayerId)
+          if (myVote) setVotedFor(myVote.target_id)
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    fetchVotes()
+    const interval = setInterval(fetchVotes, 2000)
+    return () => clearInterval(interval)
+  }, [gameId, game?.state, currentPlayerId])
+
+  // Fetch results when in RESULTS
+  useEffect(() => {
+    if (!gameId || !game || game.state !== 'RESULTS') {
+      setResults(null)
+      return
+    }
+    async function fetchResults() {
+      try {
+        const res = await fetch(`/api/games/${gameId}/results`)
+        if (res.ok) {
+          const data = await res.json()
+          setResults(data)
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    fetchResults()
+  }, [gameId, game?.state])
+
   // Fetch night info for roles that need it (Werewolf, Minion, Mason, Insomniac)
   const nightInfoRoles = ['Werewolf', 'Minion', 'Mason', 'Insomniac']
   useEffect(() => {
@@ -226,8 +313,8 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
       setNightInfo(null)
       return
     }
-    const isNightInfoRole = playerRole?.current_role && nightInfoRoles.includes(playerRole.current_role)
-    if (game.current_role_step !== playerRole?.current_role || !isNightInfoRole) {
+    const isNightInfoRole = playerRole?.initial_role && nightInfoRoles.includes(playerRole.initial_role)
+    if (game.current_role_step !== playerRole?.initial_role || !isNightInfoRole) {
       setNightInfo(null)
       return
     }
@@ -246,7 +333,7 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
     fetchNightInfo()
     const interval = setInterval(fetchNightInfo, 1000)
     return () => clearInterval(interval)
-  }, [gameId, currentPlayerId, game?.state, game?.current_role_step, playerRole?.current_role])
+  }, [gameId, currentPlayerId, game?.state, game?.current_role_step, playerRole?.initial_role])
 
   async function handleRoleAcknowledge() {
     try {
@@ -259,6 +346,45 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
       setShowWaitingForPlayers(true)
     } catch (err: any) {
       setError(err?.message ?? 'Something went wrong')
+    }
+  }
+
+  async function handleVoteNow() {
+    if (!currentPlayerId || discussionStatus?.current_player_voted_now) return
+    try {
+      const res = await fetch(`/api/games/${gameId}/players/${currentPlayerId}/vote-now`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setError(err.detail ?? 'Failed to record vote now')
+        return
+      }
+      const data = await res.json()
+      setDiscussionStatus((prev) => prev ? { ...prev, ...data, current_player_voted_now: true } : null)
+      if (data.state === 'DAY_VOTING') setGame((g) => g ? { ...g, state: 'DAY_VOTING' } : null)
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to record vote now')
+    }
+  }
+
+  async function handleVote(targetPlayerId: string) {
+    const name = players.find(p => p.player_id === targetPlayerId)?.player_name ?? 'this player'
+    if (!window.confirm(`Vote to eliminate ${name}?`)) return
+    try {
+      const res = await fetch(`/api/games/${gameId}/players/${currentPlayerId}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_player_id: targetPlayerId }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setError(err.detail ?? 'Failed to vote')
+        return
+      }
+      setVotedFor(targetPlayerId)
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to vote')
     }
   }
 
@@ -350,8 +476,122 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
     )
   }
 
+  // Results phase
+  if (game.state === 'RESULTS' && results) {
+    return (
+      <ResultsDisplay
+        deaths={results.deaths}
+        winning_team={results.winning_team}
+        players={results.players}
+        vote_summary={results.vote_summary}
+        onPlayAgain={undefined}
+        onEndSet={undefined}
+      />
+    )
+  }
+
+  // Day voting phase
+  if (game.state === 'DAY_VOTING') {
+    const voteEnabledIds = players.filter(p => p.player_id !== currentPlayerId).map(p => p.player_id)
+    return (
+      <main style={{
+        padding: '2rem',
+        fontFamily: 'Arial, sans-serif',
+        maxWidth: '1100px',
+        margin: '0 auto',
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#1a1a2e'
+      }}>
+        <PhaseIndicator state={game.state} currentRoleStep={null} />
+        {votes && (
+          <div style={{ textAlign: 'center', color: '#a8b2d1', marginBottom: '1rem' }}>
+            {votes.votes_cast}/{votes.total_players} players have voted
+            {votedFor && ' — You voted for ' + (players.find(p => p.player_id === votedFor)?.player_name ?? '')}
+          </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+          <div style={{ backgroundColor: '#16213e', padding: '1.5rem', borderRadius: '12px', border: `2px solid ${teamColor}` }}>
+            <div style={{ fontSize: '1.2rem', color: '#ffffff', fontWeight: 'bold' }}>Your Role: <span style={{ color: teamColor }}>{playerRole.initial_role}</span></div>
+          </div>
+          <AccruedActionsDisplay actions={accruedActions} />
+        </div>
+        <div style={{ backgroundColor: '#16213e', padding: '1.5rem', borderRadius: '12px', border: '2px solid #0f3460' }}>
+          <div style={{ color: '#ffffff', fontWeight: 'bold', marginBottom: '1rem' }}>Vote to eliminate</div>
+          <PlayerGrid
+            players={players}
+            currentPlayerId={currentPlayerId}
+            enabledPlayerIds={votedFor ? [] : voteEnabledIds}
+            onClick={votedFor ? undefined : handleVote}
+          />
+        </div>
+      </main>
+    )
+  }
+
+  // Day discussion phase
+  if (game.state === 'DAY_DISCUSSION') {
+    const votedNow = discussionStatus?.current_player_voted_now ?? false
+    const voteNowMajority = discussionStatus?.vote_now_majority ?? 0
+    const voteNowCount = discussionStatus?.vote_now_count ?? 0
+    const needMore = Math.max(0, voteNowMajority - voteNowCount)
+    return (
+      <main style={{
+        padding: '2rem',
+        fontFamily: 'Arial, sans-serif',
+        maxWidth: '1100px',
+        margin: '0 auto',
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#1a1a2e'
+      }}>
+        <PhaseIndicator state={game.state} currentRoleStep={null} />
+        {discussionStatus && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '1.5rem',
+            marginBottom: '1.5rem',
+            flexWrap: 'wrap'
+          }}>
+            <TimerDisplay timeRemainingSeconds={discussionStatus.time_remaining_seconds} />
+            <button
+              type="button"
+              onClick={handleVoteNow}
+              disabled={votedNow}
+              style={{
+                padding: '0.5rem 1rem',
+                fontSize: '1rem',
+                backgroundColor: votedNow ? '#555' : '#3498db',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: votedNow ? 'default' : 'pointer',
+              }}
+            >
+              {votedNow ? `Waiting for ${needMore} more to have a majority` : 'Vote Now'}
+            </button>
+          </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+          <div style={{ backgroundColor: '#16213e', padding: '1.5rem', borderRadius: '12px', border: `2px solid ${teamColor}` }}>
+            <div style={{ fontSize: '1.2rem', color: '#ffffff', fontWeight: 'bold' }}>Your Role: <span style={{ color: teamColor }}>{playerRole.initial_role}</span></div>
+          </div>
+          <AccruedActionsDisplay actions={accruedActions} />
+        </div>
+        <div style={{ backgroundColor: '#16213e', padding: '1.5rem', borderRadius: '12px', border: '2px solid #0f3460' }}>
+          <div style={{ color: '#ffffff', fontWeight: 'bold', marginBottom: '1rem' }}>Players</div>
+          <PlayerGrid players={players} currentPlayerId={currentPlayerId} enabledPlayerIds={[]} />
+        </div>
+      </main>
+    )
+  }
+
   const enabledPlayerIds = availableActions?.actionable_players.map(p => p.player_id) || []
-  const isPlayerTurn = game.state === 'NIGHT' && game.current_role_step === playerRole.current_role
+  const isPlayerTurn = game.state === 'NIGHT' && game.current_role_step === playerRole?.initial_role
 
   return (
     <main style={{
@@ -427,15 +667,15 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
         <ActionOverlay
           isOpen={showActionOverlay}
           onClose={() => {
-            const infoRole = playerRole?.current_role && nightInfoRoles.includes(playerRole.current_role)
+            const infoRole = playerRole?.initial_role && nightInfoRoles.includes(playerRole.initial_role)
             if (infoRole && nightInfo?.night_action_completed) setShowActionOverlay(false)
             else if (!infoRole) setShowActionOverlay(false)
           }}
-          canClose={nightInfoRoles.includes(playerRole?.current_role ?? '') ? (nightInfo?.night_action_completed ?? false) : true}
+          canClose={nightInfoRoles.includes(playerRole?.initial_role ?? '') ? (nightInfo?.night_action_completed ?? false) : true}
           showOkButton={false}
         >
           <RoleActionHandler
-            role={playerRole.current_role}
+            role={game.current_role_step === playerRole?.initial_role ? game.current_role_step : (playerRole?.current_role ?? '')}
             currentRoleStep={game.current_role_step}
             gameId={gameId}
             playerId={currentPlayerId || ''}

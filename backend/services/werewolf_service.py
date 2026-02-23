@@ -25,7 +25,7 @@ def get_night_info(db: Session, game_id: str, player_id: str) -> dict:
     player_role = _get_player_role(db, game_id, player_id)
     info = {"role": player_role.current_role}
 
-    if player_role.current_role != "Werewolf":
+    if player_role.initial_role != "Werewolf":
         return info
 
     werewolf_roles = _get_werewolf_roles(db, game_id)
@@ -65,8 +65,8 @@ def view_center_card(db: Session, game_id: str, player_id: str, card_index: int)
         raise ValueError("Werewolf role is not currently active")
 
     player_role = _get_player_role(db, game_id, player_id)
-    if player_role.current_role != "Werewolf":
-        raise ValueError("Player is not a Werewolf")
+    if player_role.initial_role != "Werewolf":
+        raise ValueError("Player is not a Werewolf (only original Werewolf acts)")
 
     werewolf_roles = _get_werewolf_roles(db, game_id)
     if len(werewolf_roles) != 1:
@@ -124,8 +124,8 @@ def acknowledge_werewolf(db: Session, game_id: str, player_id: str) -> dict:
         raise ValueError("Werewolf role is not currently active")
 
     player_role = _get_player_role(db, game_id, player_id)
-    if player_role.current_role != "Werewolf":
-        raise ValueError("Player is not a Werewolf")
+    if player_role.initial_role != "Werewolf":
+        raise ValueError("Player is not a Werewolf (only original Werewolf acts)")
 
     if not player_role.night_action_completed:
         # Create action records for each other werewolf this player sees
@@ -174,7 +174,10 @@ def _complete_werewolf_role_if_ready(db: Session, game_id: str) -> None:
     if not game or game.current_role_step != "Werewolf":
         return
 
-    werewolf_roles = _get_werewolf_roles(db, game_id)
+    werewolf_roles = db.query(PlayerRole).filter(
+        PlayerRole.game_id == game_id,
+        PlayerRole.initial_role == "Werewolf"
+    ).all()
     if not werewolf_roles:
         return
 

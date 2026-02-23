@@ -50,8 +50,8 @@ def perform_seer_action(
         raise ValueError("Seer role is not currently active")
 
     player_role = _get_player_role(db, game_id, player_id)
-    if player_role.current_role != "Seer":
-        raise ValueError("Player is not a Seer")
+    if player_role.initial_role != "Seer":
+        raise ValueError("Player is not a Seer (only original Seer acts)")
 
     if player_role.night_action_completed:
         raise ValueError("Seer has already performed their action")
@@ -153,7 +153,7 @@ def _complete_seer_role_if_ready(db: Session, game_id: str) -> None:
 
     seer_roles = db.query(PlayerRole).filter(
         PlayerRole.game_id == game_id,
-        PlayerRole.current_role == "Seer"
+        PlayerRole.initial_role == "Seer"
     ).all()
     
     if not seer_roles:

@@ -42,16 +42,17 @@ def get_available_actions(db: Session, game_id: str, player_id: str) -> dict:
             "instructions": "No actions available outside of night phase."
         }
 
-    # Check if it's the player's role turn
-    if game.current_role_step != player_role.current_role:
+    # Check if it's this player's turn: only the player whose *initial* role matches
+    # the current step gets to act (so e.g. Robber who stole Insomniac doesn't act at Insomniac step).
+    if game.current_role_step != player_role.initial_role:
         return {
             "actionable_players": [],
             "actionable_center_cards": [],
             "instructions": f"Waiting for {game.current_role_step} to complete their action..."
         }
 
-    # Role-specific action logic
-    current_role = player_role.current_role
+    # Role-specific action logic: use the step (role currently acting), not player's current card
+    current_role = game.current_role_step
 
     if current_role == "Werewolf":
         # Check if lone wolf or multiple werewolves
@@ -161,6 +162,7 @@ def get_player_actions(db: Session, game_id: str, player_id: str) -> dict:
         raise ValueError(f"Player {player_id} not found in game {game_id}")
 
     actions = []
+    # For "do we add werewolf info" we care about player's current role (what they see)
     current_role = player_role.current_role
 
     # Get actions from database
@@ -168,6 +170,9 @@ def get_player_actions(db: Session, game_id: str, player_id: str) -> dict:
         Action.game_id == game_id,
         Action.player_id == player_id
     ).order_by(Action.timestamp).all()
+
+    # Collect werewolf-fellow VIEW_CARDs so we can emit one combined description
+    werewolf_fellow_target_ids = []
 
     for action in db_actions:
         if action.action_type == ActionType.VIEW_CARD:
@@ -190,6 +195,10 @@ def get_player_actions(db: Session, game_id: str, player_id: str) -> dict:
                     "action_type": "VIEW_CARD",
                     "description": f"Your current role is: {action.target_role}"
                 })
+            elif (current_role == "Werewolf" and action.source_role == "Werewolf"
+                  and action.target_role == "Werewolf" and action.target_id != player_id):
+                # Werewolf viewing fellow werewolf(s) — aggregate, don't emit "You viewed X's card"
+                werewolf_fellow_target_ids.append(action.target_id)
             else:
                 # Viewed another player's card
                 target_player = db.query(Player).filter(Player.player_id == action.target_id).first()
@@ -219,6 +228,23 @@ def get_player_actions(db: Session, game_id: str, player_id: str) -> dict:
             actions.append({
                 "action_type": "SWAP_PLAYER_TO_CENTER",
                 "description": f"You exchanged your card with center card {card_label}. You don't know your new role."
+            })
+
+    # Emit one description for multiple werewolves (werewolf-fellow VIEW_CARDs collected above)
+    if werewolf_fellow_target_ids:
+        names = []
+        for tid in werewolf_fellow_target_ids:
+            p = db.query(Player).filter(Player.player_id == tid).first()
+            names.append(p.player_name if p else tid)
+        if len(names) == 1:
+            actions.append({
+                "action_type": "VIEW_CARD",
+                "description": f"There are 2 werewolves, the other is {names[0]}."
+            })
+        else:
+            actions.append({
+                "action_type": "VIEW_CARD",
+                "description": f"You are a Werewolf. Your fellow werewolves are: {', '.join(names)}"
             })
 
     # Also add role-specific info that might not be in actions table yet

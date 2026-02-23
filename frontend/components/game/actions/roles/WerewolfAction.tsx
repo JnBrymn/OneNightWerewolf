@@ -26,18 +26,19 @@ export default function WerewolfAction({
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState('')
 
-  // If nightInfo isn't loaded yet, show loading state
-  if (!nightInfo) {
+  const isLoneWolf = nightInfo?.is_lone_wolf ?? false
+  const otherWerewolves = nightInfo?.other_werewolves ?? []
+  const actionCompleted = nightInfo?.night_action_completed ?? false
+
+  // If nightInfo isn't loaded yet, show loading state — unless lone wolf already viewed a card
+  // (after viewing, backend advances step and nightInfo gets cleared, so we must not show loading again)
+  if (!nightInfo && !viewedCenterRole) {
     return (
       <div style={{ color: '#ffffff', textAlign: 'center', padding: '2rem' }}>
         <div style={{ fontSize: '1.2rem', marginBottom: '1rem' }}>Loading your werewolf information...</div>
       </div>
     )
   }
-
-  const isLoneWolf = nightInfo.is_lone_wolf ?? false
-  const otherWerewolves = nightInfo.other_werewolves ?? []
-  const actionCompleted = nightInfo.night_action_completed ?? false
 
   async function handleViewCenter(cardIndex: number) {
     if (actionLoading || actionCompleted) return
@@ -91,23 +92,26 @@ export default function WerewolfAction({
   }
   
 
-  if (isLoneWolf) {
+  // Lone wolf: show choose-card UI, or (once viewed) result + OK. Also show result when nightInfo was cleared after viewing.
+  if (isLoneWolf || viewedCenterRole) {
     return (
       <div>
         <div style={{ color: '#ffffff', fontWeight: 'bold', marginBottom: '1rem', fontSize: '1.2rem' }}>
-          You are the lone Werewolf. Choose one center card to view.
+          {viewedCenterRole ? 'You viewed a center card.' : 'You are the lone Werewolf. Choose one center card to view.'}
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', justifyContent: 'center' }}>
-          {[0, 1, 2].map((index) => (
-            <CenterCardButton
-              key={index}
-              cardIndex={index}
-              enabled={!actionLoading && !actionCompleted}
-              selected={selectedCenterIndex === index}
-              onClick={handleViewCenter}
-            />
-          ))}
-        </div>
+        {!viewedCenterRole && (
+          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', justifyContent: 'center' }}>
+            {[0, 1, 2].map((index) => (
+              <CenterCardButton
+                key={index}
+                cardIndex={index}
+                enabled={!actionLoading && !actionCompleted}
+                selected={selectedCenterIndex === index}
+                onClick={handleViewCenter}
+              />
+            ))}
+          </div>
+        )}
         {viewedCenterRole && (
           <>
             <div style={{ color: '#a8ffef', fontWeight: 'bold', textAlign: 'center', marginBottom: '1rem' }}>

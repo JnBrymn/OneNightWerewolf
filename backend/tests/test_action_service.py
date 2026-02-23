@@ -197,6 +197,26 @@ def test_get_player_actions_after_werewolf_view(db, game_setup):
     assert any("center card" in action["description"].lower() for action in data["actions"])
 
 
+def test_get_player_actions_multiple_werewolves_shows_fellow_message(db, game_setup):
+    """Test that multiple werewolves see 'There are 2 werewolves, the other is X' not 'You viewed X's card'."""
+    game = game_setup["game"]
+    werewolf1 = game_setup["players"][0]
+    werewolf2 = game_setup["players"][1]
+
+    # Werewolf 1 acknowledges (creates VIEW_CARD for viewing werewolf2)
+    ack = client.post(f"/api/games/{game.game_id}/players/{werewolf1.player_id}/acknowledge")
+    assert ack.status_code == 200
+
+    actions_response = client.get(f"/api/games/{game.game_id}/players/{werewolf1.player_id}/actions")
+    assert actions_response.status_code == 200
+    data = actions_response.json()
+    assert len(data["actions"]) >= 1
+    # Should show fellow-werewolf message, not "You viewed Player X's card. It is: Werewolf"
+    descriptions = [a["description"] for a in data["actions"]]
+    assert any("There are 2 werewolves" in d and "the other is" in d for d in descriptions)
+    assert not any("You viewed" in d and "card. It is: Werewolf" in d for d in descriptions)
+
+
 def test_get_available_actions_404_for_invalid_game(db):
     """Test that 404 is returned for invalid game."""
     response = client.get("/api/games/invalid-game/players/invalid-player/available-actions")

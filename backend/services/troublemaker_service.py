@@ -41,8 +41,8 @@ def perform_troublemaker_action(
         raise ValueError("Troublemaker role is not currently active")
 
     troublemaker_role = _get_player_role(db, game_id, player_id)
-    if troublemaker_role.current_role != "Troublemaker":
-        raise ValueError("Player is not the Troublemaker")
+    if troublemaker_role.initial_role != "Troublemaker":
+        raise ValueError("Player is not the Troublemaker (only original Troublemaker acts)")
 
     if troublemaker_role.night_action_completed:
         raise ValueError("Troublemaker has already performed their action")
@@ -55,13 +55,10 @@ def perform_troublemaker_action(
     p1_role = _get_player_role(db, game_id, player1_id)
     p2_role = _get_player_role(db, game_id, player2_id)
 
-    # Swap current_role and night_action_completed (completion travels with the card)
+    # Swap only current_role (cards). Completion stays with the player so only original role-holders act later.
     r1, r2 = p1_role.current_role, p2_role.current_role
-    c1, c2 = p1_role.night_action_completed, p2_role.night_action_completed
     p1_role.current_role = r2
     p2_role.current_role = r1
-    p1_role.night_action_completed = c2
-    p2_role.night_action_completed = c1
 
     action = Action(
         game_id=game_id,
@@ -98,7 +95,7 @@ def _complete_troublemaker_role_if_ready(db: Session, game_id: str) -> None:
         return
     roles = db.query(PlayerRole).filter(
         PlayerRole.game_id == game_id,
-        PlayerRole.current_role == "Troublemaker"
+        PlayerRole.initial_role == "Troublemaker"
     ).all()
     if roles and all(r.night_action_completed for r in roles):
         night_service.mark_role_complete(db, game_id, "Troublemaker")
