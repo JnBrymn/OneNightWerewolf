@@ -1,0 +1,16 @@
+---
+description: Read product directory first to understand design, game rules, and implementation status
+alwaysApply: true
+---
+
+# Product Context (One Night Werewolf)
+
+At the **start of each conversation**, read the `product/` directory to ground your work:
+
+1. **product/product_design.md** — product design and goals
+2. **product/instructions.md** — One Night Werewolf game rules/instructions
+3. **product/implementation_steps.md** — implementation plan and current progress
+
+Optionally check `product/small_bugs.md` and `product/random_ideas.md` when relevant.
+
+Use this context to align suggestions with the intended design and to know roughly where we are in the implementation.
