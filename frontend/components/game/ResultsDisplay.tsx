@@ -83,42 +83,52 @@ export default function ResultsDisplay({
         padding: '1.5rem',
         borderRadius: '12px',
         marginBottom: '1.5rem',
+        overflowX: 'auto',
       }}>
-        <div style={{ fontWeight: 'bold', marginBottom: '0.75rem' }}>Vote counts</div>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {players.map(p => (
-            <li key={p.player_id} style={{ marginBottom: '0.5rem' }}>
-              {p.player_name}: {vote_summary[p.player_id] ?? 0} vote(s)
-              {p.died && ' ☠️'}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div style={{
-        backgroundColor: '#16213e',
-        padding: '1.5rem',
-        borderRadius: '12px',
-        marginBottom: '1.5rem',
-      }}>
-        <div style={{ fontWeight: 'bold', marginBottom: '0.75rem' }}>Players</div>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {players.map(p => (
-            <li
-              key={p.player_id}
-              style={{
-                marginBottom: '0.75rem',
-                padding: '0.5rem',
-                borderRadius: '8px',
-                borderLeft: `4px solid ${TEAM_COLORS[p.team] || '#95a5a6'}`,
-                backgroundColor: p.won ? 'rgba(46, 204, 113, 0.1)' : 'transparent',
-              }}
-            >
-              <strong>{p.player_name}</strong> — {p.current_role}
-              {p.died && ' (died)'} {p.won && ' ✓ Won'}
-            </li>
-          ))}
-        </ul>
+        <table style={{ width: '100%', borderCollapse: 'collapse', color: '#fff' }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid #2ecc71', textAlign: 'left' }}>
+              <th style={{ padding: '0.75rem' }}>Player</th>
+              <th style={{ padding: '0.75rem' }}>Original role</th>
+              <th style={{ padding: '0.75rem' }}>Final role</th>
+              <th style={{ padding: '0.75rem' }}>Votes</th>
+              <th style={{ padding: '0.75rem' }}>Died</th>
+              <th style={{ padding: '0.75rem' }}>Team</th>
+              <th style={{ padding: '0.75rem' }}>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {players.map(p => {
+              const votes = vote_summary[p.player_id] ?? 0
+              const teamColor = TEAM_COLORS[p.team] || '#95a5a6'
+              const isWinner = p.won
+              return (
+                <tr
+                  key={p.player_id}
+                  style={{
+                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                    borderLeft: `4px solid ${teamColor}`,
+                    backgroundColor: isWinner ? 'rgba(46, 204, 113, 0.15)' : 'transparent',
+                  }}
+                >
+                  <td style={{ padding: '0.75rem', fontWeight: 600 }}>{p.player_name}</td>
+                  <td style={{ padding: '0.75rem' }}>{p.initial_role}</td>
+                  <td style={{ padding: '0.75rem' }}>{p.current_role}</td>
+                  <td style={{ padding: '0.75rem' }}>{votes}{p.died ? ' ☠️' : ''}</td>
+                  <td style={{ padding: '0.75rem', color: p.died ? '#e74c3c' : undefined }}>
+                    {p.died ? 'Yes' : 'No'}
+                  </td>
+                  <td style={{ padding: '0.75rem', color: teamColor, textTransform: 'capitalize' }}>
+                    {p.team}
+                  </td>
+                  <td style={{ padding: '0.75rem', color: isWinner ? '#2ecc71' : undefined }}>
+                    {isWinner ? '✓ Won' : '—'}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
 
       <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>

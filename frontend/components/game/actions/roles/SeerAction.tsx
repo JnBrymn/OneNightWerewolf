@@ -85,7 +85,7 @@ export default function SeerAction({
 
   // Step 2a: View Player Path
   if (actionType === 'view_player' && !viewedRole && !actionCompleted) {
-    async function handleViewPlayer(targetPlayerId: string) {
+    const handleViewPlayer = async (targetPlayerId: string) => {
       if (actionLoading) return
       
       setActionLoading(true)
@@ -147,7 +147,7 @@ export default function SeerAction({
 
   // Step 2b: View Center Path
   if (actionType === 'view_center' && viewedRoles.length === 0 && !actionCompleted) {
-    async function handleViewCenter(cardIndex: number) {
+    const handleViewCenter = async (cardIndex: number) => {
       if (actionLoading || selectedCenterCards.includes(cardIndex)) return
       
       const newSelection = [...selectedCenterCards, cardIndex]

@@ -6,7 +6,7 @@ These are small bugs that we will eventually want to tackle, but they aren't imm
 5. ~~Robber's role should change after it's role, but it shouldn't take the behavior of the other role later (similar to 1)~~ FIXED: same as 1.
 6. ~~Why does the troublemaker say "you are the insomniac and your role is ..."?~~ FIXED: RoleActionHandler uses currentRoleStep only when it's this player's turn (role === currentRoleStep), so Insomniac UI no longer shown to Troublemaker when step is Insomniac.
 7. ~~The werewolf's information says "You viewed Player2's card. It is: Werewolf"~~ FIXED: action_service now emits "There are 2 werewolves, the other is Steve" (or "Your fellow werewolves are: A, B" for 3+) for fellow-werewolf VIEW_CARDs.
-8. For the scripts/dev_seed_game.py script Make it update the database so that we're already past the acknowledgement of roles step and we can immediately start the game. 
+8. ~~For the scripts/dev_seed_game.py script Make it update the database so that we're already past the acknowledgement of roles step and we can immediately start the game.~~
 9. For the minion, after you see the werewolves, the information says "You are a Werewolf." But the truth is the minion is not a werewolf. It just needs to know what the other werewolves are because it's on the werewolf team. It's a minion. 
-10. Any sort of a tie between two people or more does not result in killing anybody, and thus the werewolf wins if there is one OR the villiagers win if there is no werewolves 
-11. For voting, I would like the vote to be an overlay and not use the "alert" box.
+10. For voting, I would like the vote to be an overlay and not use the "alert" box.
+11. The Insomniac should get a chance to acknowledge that she's seen her card before it goes back to the night screen.

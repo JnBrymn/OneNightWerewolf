@@ -153,11 +153,12 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
 
   // Fetch players
   useEffect(() => {
-    if (!game?.game_set_id) return
+    const gameSetId = game?.game_set_id
+    if (!gameSetId) return
 
     async function fetchPlayers() {
       try {
-        const response = await fetch(`/api/game-sets/${game.game_set_id}/players`)
+        const response = await fetch(`/api/game-sets/${gameSetId}/players`)
         if (!response.ok) throw new Error('Failed to fetch players')
         const data = await response.json()
         setPlayers(data.players || [])
@@ -182,6 +183,7 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
       return
     }
 
+    const currentGame = game
     async function fetchAvailableActions() {
       try {
         const response = await fetch(`/api/games/${gameId}/players/${currentPlayerId}/available-actions`)
@@ -190,9 +192,9 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
         setAvailableActions(data)
         
         // Show overlay only when it's this player's turn: match by *initial* role so e.g. Robber who stole Insomniac doesn't act at Insomniac step
-        const isPlayerTurn = game.current_role_step && 
+        const isPlayerTurn = currentGame.current_role_step && 
                             playerRole?.initial_role && 
-                            game.current_role_step === playerRole.initial_role
+                            currentGame.current_role_step === playerRole.initial_role
         const isNightInfoRole = playerRole?.initial_role && nightInfoRoles.includes(playerRole.initial_role)
         const nightActionDone = isNightInfoRole && nightInfo?.night_action_completed
 
@@ -680,7 +682,7 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
             gameId={gameId}
             playerId={currentPlayerId || ''}
             nightInfo={nightInfo}
-            availableActions={availableActions}
+            availableActions={availableActions ?? undefined}
             onActionComplete={handleActionComplete}
           />
         </ActionOverlay>

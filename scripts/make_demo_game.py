@@ -2,6 +2,9 @@
 """
 Seed a dev game via API, then optionally overwrite DB with specific player roles and center cards.
 
+When the backend DB exists, all players are marked as having acknowledged their role so opened
+tabs land on the main game board (night phase) instead of the role-reveal screen.
+
 Two parameters:
   --players   CSV of roles for player 1, player 2, ... player N (N = number of roles in list).
   --center    CSV of the 3 center card roles, left to right.
@@ -117,6 +120,11 @@ def main() -> int:
         default=os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/"),
         help="Frontend base URL for printing player links",
     )
+    parser.add_argument(
+        "--vote",
+        action="store_true",
+        help="Set game state to DAY_VOTING and sync current_role to initial_role for all players (requires DB).",
+    )
     args = parser.parse_args()
 
     has_players = bool(args.players.strip())
@@ -202,19 +210,20 @@ def main() -> int:
     started = post(f"/api/game-sets/{game_set_id}/start")
     game_id = started["game_id"]
 
-    if player_roles is not None and center_roles is not None:
-        # Overwrite DB: player roles and center cards
-        if not DB_PATH.exists():
-            print(f"Error: Database not found at {DB_PATH}. Start the backend once to create it.", file=sys.stderr)
-            return 1
+    # Fixed roles or --vote require DB; if missing, error before opening anything
+    if (player_roles is not None and center_roles is not None or args.vote) and not DB_PATH.exists():
+        print(f"Error: Database not found at {DB_PATH}. Start the backend once to create it.", file=sys.stderr)
+        return 1
 
+    vote_table_output = None
+    if DB_PATH.exists():
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
 
-        # Load all models so relationship chain resolves (player -> game_set_players; GameSet -> game_set_players; Game -> GameSet)
         from models import player  # noqa: F401
         from models.game_set import GameSet  # noqa: F401
-        from models.game import Game
+        from models.game import Game, GameState
+        from models.player import Player
         from models.player_role import PlayerRole
         from models.center_card import CenterCard
 
@@ -227,35 +236,67 @@ def main() -> int:
                 print("Error: Game not found in DB.", file=sys.stderr)
                 return 1
 
-            # Player order: same as join order (player_ids)
-            for i, pid in enumerate(player_ids):
-                pr = db.query(PlayerRole).filter(
-                    PlayerRole.game_id == game_id,
-                    PlayerRole.player_id == pid,
-                ).first()
-                if not pr:
-                    continue
-                role = player_roles[i]
-                pr.initial_role = role
-                pr.current_role = role
-                pr.team = team_for_role(role)
+            if player_roles is not None and center_roles is not None:
+                # Overwrite DB: player roles and center cards
+                for i, pid in enumerate(player_ids):
+                    pr = db.query(PlayerRole).filter(
+                        PlayerRole.game_id == game_id,
+                        PlayerRole.player_id == pid,
+                    ).first()
+                    if not pr:
+                        continue
+                    role = player_roles[i]
+                    pr.initial_role = role
+                    pr.current_role = role
+                    pr.team = team_for_role(role)
 
-            # Center: left, center, right
-            positions = ["left", "center", "right"]
-            for i, pos in enumerate(positions):
-                cc = db.query(CenterCard).filter(
-                    CenterCard.game_id == game_id,
-                    CenterCard.position == pos,
-                ).first()
-                if cc:
-                    cc.role = center_roles[i]
+                positions = ["left", "center", "right"]
+                for i, pos in enumerate(positions):
+                    cc = db.query(CenterCard).filter(
+                        CenterCard.game_id == game_id,
+                        CenterCard.position == pos,
+                    ).first()
+                    if cc:
+                        cc.role = center_roles[i]
 
-            # Recompute active_roles on game (roles that wake up, in wake order)
-            all_roles_in_game = set(player_roles) | set(center_roles)
-            active_roles = [r for r in WAKE_ORDER if r in all_roles_in_game]
-            game.active_roles = active_roles
+                all_roles_in_game = set(player_roles) | set(center_roles)
+                active_roles = [r for r in WAKE_ORDER if r in all_roles_in_game]
+                game.active_roles = active_roles
 
-            db.commit()
+            # Mark all players as having acknowledged role (dev convenience: tabs open to main board)
+            for pr in db.query(PlayerRole).filter(PlayerRole.game_id == game_id).all():
+                pr.role_revealed = True
+
+            if args.vote:
+                # Jump to day voting; shift final roles: each player gets initial_role of player to their left (mod N)
+                game.state = GameState.DAY_VOTING
+                game.current_role_step = None
+                roles_in_order = [
+                    db.query(PlayerRole).filter(
+                        PlayerRole.game_id == game_id,
+                        PlayerRole.player_id == pid,
+                    ).first()
+                    for pid in player_ids
+                ]
+                roles_in_order = [pr for pr in roles_in_order if pr is not None]
+                n = len(roles_in_order)
+                initial_roles = [pr.initial_role for pr in roles_in_order]
+                for i in range(n):
+                    left_initial = initial_roles[(i - 1) % n]
+                    roles_in_order[i].current_role = left_initial
+                    roles_in_order[i].team = team_for_role(left_initial)
+                db.commit()
+                # Table: player name, original role, new role (printed at end of CLI output)
+                vote_table = []
+                for i, pid in enumerate(player_ids):
+                    pl = db.query(Player).filter(Player.player_id == pid).first()
+                    name = pl.player_name if pl else f"Player{i + 1}"
+                    pr = roles_in_order[i] if i < len(roles_in_order) else None
+                    if pr:
+                        vote_table.append((name, initial_roles[i], pr.current_role))
+                vote_table_output = vote_table
+            else:
+                db.commit()
         finally:
             db.close()
 
@@ -266,12 +307,23 @@ def main() -> int:
     urls = []
     for idx, pid in enumerate(player_ids, start=1):
         role_info = get(f"/api/games/{game_id}/players/{pid}/role")
-        role_name = role_info.get("current_role", "?")
+        # Use initial_role when --vote so URL list stays in same order as --players
+        role_name = role_info.get("initial_role", "?") if args.vote else role_info.get("current_role", "?")
         url = f"{args.frontend}/game/{game_id}?player_id={pid}"
         urls.append(url)
         print(f"  Player {idx} ({role_name}): {url}")
     for url in urls:
         webbrowser.open(url)
+    if vote_table_output:
+        print("\n--vote: roles shifted left (your new role = original role of player to your left)")
+        col1, col2, col3 = "Player", "Original role", "New role"
+        w1 = max(len(col1), max(len(r[0]) for r in vote_table_output))
+        w2 = max(len(col2), max(len(r[1]) for r in vote_table_output))
+        w3 = max(len(col3), max(len(r[2]) for r in vote_table_output))
+        print(f"  {col1:<{w1}}  {col2:<{w2}}  {col3:<{w3}}")
+        print("  " + "-" * (w1 + w2 + w3 + 4))
+        for name, orig, new in vote_table_output:
+            print(f"  {name:<{w1}}  {orig:<{w2}}  {new:<{w3}}")
     return 0
 
 

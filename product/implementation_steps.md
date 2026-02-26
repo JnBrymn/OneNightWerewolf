@@ -1,8 +1,8 @@
 # One Night Werewolf - Implementation Steps
 
-## 🎯 CURRENT STATUS (Updated: 2026-02-22)
+## 🎯 CURRENT STATUS (Updated: 2026-02-25)
 
-**Progress:** Day discussion, voting, and results complete (Steps 11–13); ~65% of 20 steps
+**Progress:** Single-game loop complete (Steps 1–13); ~65% of 20 steps. Next: multi-game APIs and UI (Step 14).
 
 ### ✅ Completed Steps:
 - Step 1: Project Setup & Basic Infrastructure
@@ -21,11 +21,16 @@
 - Step 12: Voting Phase (POST vote, GET votes, auto → RESULTS)
 - Step 13: Results & Win Conditions (deaths, Hunter, village/werewolf/tanner/minion wins, ResultsDisplay)
 
-### 🚀 Next Steps: Step 14 - Multi-Game Support & Scoring
+**Results/scoring (done):** Win/loss is per-player from `get_results()` (winning_team + current_role/team). Voting: highest vote count ≥2 → those players die; tie at that count → all tied die; no one gets >1 vote → no one dies. Minion solo win: no werewolf players and at least one non-Minion died.
+
+### 🚀 Next Steps: Step 14 - Multi-Game Support
 
 **Current State:**
-- Full game loop: NIGHT → DAY_DISCUSSION → DAY_VOTING → RESULTS
+- Full single-game loop: NIGHT → DAY_DISCUSSION → DAY_VOTING → RESULTS
+- Per-game scoring logic is in place (who won/lost each game)
 - "Play Another Game" / "End Game Set" on results screen are placeholders (not wired)
+
+**Step 14 remaining:** Backend: `POST /api/game-sets/{game_set_id}/games` (new game in set), `GET /api/game-sets/{game_set_id}/scores` (cumulative wins/losses). Frontend: wire buttons, show "Game X of [set]" and cumulative score table on results.
 
 ---
 - **Step 2**: Game Set Creation (Lobby Start) ✅

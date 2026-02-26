@@ -26,7 +26,12 @@ def get_results(db: Session, game_id: str) -> dict:
         vote_summary = {}
     else:
         max_votes = max(vote_counts.values())
-        deaths = [pid for pid, count in vote_counts.items() if count == max_votes]
+        # Official rule: "If no player receives more than one vote, no one dies."
+        # (e.g. everyone points right → each gets 1 vote → no one dies)
+        if max_votes <= 1:
+            deaths = []
+        else:
+            deaths = [pid for pid, count in vote_counts.items() if count == max_votes]
         vote_summary = {pid: count for pid, count in vote_counts.items()}
 
     # Hunter: if Hunter died, their vote target also dies
@@ -54,13 +59,16 @@ def get_results(db: Session, game_id: str) -> dict:
     elif any_werewolf_died:
         winning_team = "village"
     elif no_werewolves_in_game and minion_players:
-        # No werewolves: Minion wins if Minion died and at least one other died
-        minion_died = any(pr.player_id in deaths for pr in minion_players)
-        other_died = len(deaths) >= 2 or (len(deaths) == 1 and not minion_died)
-        if minion_died and len(deaths) >= 1:
+        # Instructions: "If no players are Werewolves, the Minion wins if one other player dies."
+        # So: at least one non-Minion player must have died (Minion may or may not die, e.g. tie).
+        other_player_died = any(
+            pr.player_id in deaths and pr.current_role != "Minion" for pr in player_roles
+        )
+        if other_player_died:
             winning_team = "minion"
         else:
-            winning_team = "werewolf"  # Minion wins with "werewolf team" when no werewolves
+            # Only Minion died or no deaths: werewolf team wins (no werewolves died)
+            winning_team = "werewolf"
     else:
         winning_team = "werewolf"
 
