@@ -86,6 +86,7 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
     vote_summary: { [playerId: string]: number }
   } | null>(null)
   const [votedFor, setVotedFor] = useState<string | null>(null)
+  const [voteConfirmTarget, setVoteConfirmTarget] = useState<string | null>(null)
 
   // Fetch game state
   useEffect(() => {
@@ -370,21 +371,29 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
     }
   }
 
-  async function handleVote(targetPlayerId: string) {
-    const name = players.find(p => p.player_id === targetPlayerId)?.player_name ?? 'this player'
-    if (!window.confirm(`Vote to eliminate ${name}?`)) return
+  function openVoteConfirm(targetPlayerId: string) {
+    setVoteConfirmTarget(targetPlayerId)
+  }
+
+  function closeVoteConfirm() {
+    setVoteConfirmTarget(null)
+  }
+
+  async function confirmVote() {
+    if (!voteConfirmTarget || !currentPlayerId) return
     try {
       const res = await fetch(`/api/games/${gameId}/players/${currentPlayerId}/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_player_id: targetPlayerId }),
+        body: JSON.stringify({ target_player_id: voteConfirmTarget }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         setError(err.detail ?? 'Failed to vote')
         return
       }
-      setVotedFor(targetPlayerId)
+      setVotedFor(voteConfirmTarget)
+      setVoteConfirmTarget(null)
     } catch (e: any) {
       setError(e?.message ?? 'Failed to vote')
     }
@@ -495,6 +504,7 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
   // Day voting phase
   if (game.state === 'DAY_VOTING') {
     const voteEnabledIds = players.filter(p => p.player_id !== currentPlayerId).map(p => p.player_id)
+    const pendingVoteName = voteConfirmTarget ? (players.find(p => p.player_id === voteConfirmTarget)?.player_name ?? 'this player') : ''
     return (
       <main style={{
         padding: '2rem',
@@ -525,9 +535,55 @@ export default function GameBoard({ gameId, currentPlayerId }: GameBoardProps) {
             players={players}
             currentPlayerId={currentPlayerId}
             enabledPlayerIds={votedFor ? [] : voteEnabledIds}
-            onClick={votedFor ? undefined : handleVote}
+            onClick={votedFor ? undefined : openVoteConfirm}
           />
         </div>
+
+        {voteConfirmTarget && (
+          <ActionOverlay
+            isOpen={!!voteConfirmTarget}
+            onClose={closeVoteConfirm}
+            canClose={true}
+            showOkButton={false}
+          >
+            <div style={{ color: '#ffffff', marginBottom: '1.5rem' }}>
+              Vote to eliminate <strong>{pendingVoteName}</strong>?
+            </div>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={closeVoteConfirm}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#555',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmVote}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#e94560',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Confirm
+              </button>
+            </div>
+          </ActionOverlay>
+        )}
       </main>
     )
   }
